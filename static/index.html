@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinAgent - מערכת ניהול מחלקה פיננסית</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="login-screen" class="login-screen hidden">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">FA</div>
+      <h1>FinAgent</h1>
+      <p>מערכת ניהול מחלקה פיננסית | בנק ישראל</p>
+    </div>
+    <form id="login-form">
+      <div class="form-group">
+        <label for="login-email">אימייל</label>
+        <input type="email" id="login-email" required placeholder="your@boi.org.il" dir="ltr">
+      </div>
+      <div class="form-group">
+        <label for="login-password">סיסמה</label>
+        <input type="password" id="login-password" required placeholder="••••••••" dir="ltr">
+      </div>
+      <div id="login-error" class="error-msg hidden"></div>
+      <button type="submit" class="btn-primary btn-full" id="login-btn">
+        <span id="login-btn-text">כניסה למערכת</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="app" class="app hidden">
+
+  <!-- Sidebar -->
+  <nav id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark">FA</div>
+      <span class="logo-text">FinAgent</span>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">ניווט</div>
+      <a href="#" class="nav-item active" data-panel="tasks" onclick="showPanel('tasks')">
+        <span class="nav-icon">📋</span>
+        <span>משימות ופרויקטים</span>
+      </a>
+      <a href="#" class="nav-item" data-panel="dashboard" onclick="showPanel('dashboard')">
+        <span class="nav-icon">📊</span>
+        <span>דשבורד</span>
+      </a>
+      <a href="#" class="nav-item" data-panel="reports" onclick="showPanel('reports')">
+        <span class="nav-icon">📝</span>
+        <span>דיווח</span>
+      </a>
+      <a href="#" class="nav-item admin-only" data-panel="admin" onclick="showPanel('admin')">
+        <span class="nav-icon">⚙️</span>
+        <span>ניהול</span>
+      </a>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-badge">
+        <div class="user-avatar" id="sidebar-avatar">Y</div>
+        <div class="user-info">
+          <div class="user-name" id="sidebar-name">טוען...</div>
+          <div class="user-role" id="sidebar-role"></div>
+        </div>
+      </div>
+      <button class="btn-ghost btn-sm" onclick="logout()">יציאה</button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- ══════════ TASKS PANEL ══════════ -->
+    <div id="panel-tasks" class="panel active">
+      <div class="panel-header">
+        <div>
+          <h2>משימות ופרויקטים</h2>
+          <p class="panel-subtitle" id="tasks-subtitle">כל הפריטים הפתוחים שלך</p>
+        </div>
+        <div class="panel-actions">
+          <div class="view-toggle">
+            <button class="view-btn active" id="view-list" onclick="setView('list')">רשימה</button>
+            <button class="view-btn" id="view-board" onclick="setView('board')">לוח</button>
+          </div>
+          <button class="btn-primary" onclick="openCreateModal()">+ פריט חדש</button>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters-bar">
+        <input type="text" id="search-input" placeholder="חיפוש..." class="search-input" oninput="filterItems()">
+        <select id="filter-type" onchange="filterItems()" class="filter-select">
+          <option value="">כל הסוגים</option>
+          <option value="project">פרויקט</option>
+          <option value="task">משימה</option>
+          <option value="subtask">תת-משימה</option>
+          <option value="followup">מעקב</option>
+          <option value="reminder">תזכורת</option>
+        </select>
+        <select id="filter-status" onchange="filterItems()" class="filter-select">
+          <option value="">כל הסטטוסים</option>
+          <option value="open">פתוח</option>
+          <option value="in_progress">בטיפול</option>
+          <option value="pending_review">ממתין לסקירה</option>
+          <option value="completed">הושלם</option>
+          <option value="planning">תכנון</option>
+          <option value="active">פעיל</option>
+        </select>
+        <select id="filter-priority" onchange="filterItems()" class="filter-select">
+          <option value="">כל העדיפויות</option>
+          <option value="critical">קריטי</option>
+          <option value="high">גבוה</option>
+          <option value="medium">בינוני</option>
+          <option value="low">נמוך</option>
+        </select>
+        <label class="checkbox-label">
+          <input type="checkbox" id="filter-my-work" onchange="filterItems()"> שלי בלבד
+        </label>
+      </div>
+
+      <!-- List View -->
+      <div id="items-list-view">
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>כותרת</th>
+              <th>סוג</th>
+              <th>סטטוס</th>
+              <th>עדיפות</th>
+              <th>אחראי</th>
+              <th>תאריך יעד</th>
+              <th>פעולות</th>
+            </tr>
+          </thead>
+          <tbody id="items-tbody"></tbody>
+        </table>
+        <div id="items-empty" class="empty-state hidden">
+          <p>אין פריטים להצגה</p>
+        </div>
+      </div>
+
+      <!-- Board View -->
+      <div id="items-board-view" class="hidden">
+        <div class="kanban-board" id="kanban-board"></div>
+      </div>
+    </div>
+
+    <!-- ══════════ ITEM DETAIL MODAL ══════════ -->
+    <div id="item-modal" class="modal hidden">
+      <div class="modal-overlay" onclick="closeItemModal()"></div>
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <div>
+            <span id="modal-type-badge" class="type-badge"></span>
+            <h3 id="modal-title" contenteditable="false"></h3>
+          </div>
+          <button class="btn-ghost" onclick="closeItemModal()">✕</button>
+        </div>
+        <div class="modal-body-split">
+          <div class="modal-main">
+            <!-- AI Summary -->
+            <div id="modal-ai-summary" class="ai-summary-box hidden">
+              <div class="ai-label">🤖 סיכום AI</div>
+              <p id="modal-ai-summary-text"></p>
+            </div>
+            <!-- Description -->
+            <div class="form-group">
+              <label>תיאור</label>
+              <textarea id="modal-description" rows="4" placeholder="תיאור..."></textarea>
+            </div>
+            <!-- Activity Log -->
+            <div class="activity-section">
+              <h4>פעילות</h4>
+              <div id="modal-activity"></div>
+            </div>
+          </div>
+          <div class="modal-sidebar">
+            <div class="detail-fields">
+              <div class="detail-row">
+                <span class="detail-label">סטטוס</span>
+                <select id="modal-status" onchange="saveItemField('status', this.value)"></select>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">עדיפות</span>
+                <select id="modal-priority" onchange="saveItemField('priority', this.value)">
+                  <option value="">-</option>
+                  <option value="critical">קריטי</option>
+                  <option value="high">גבוה</option>
+                  <option value="medium">בינוני</option>
+                  <option value="low">נמוך</option>
+                </select>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">אחראי</span>
+                <select id="modal-assignee" onchange="saveItemField('assignee_user_id', this.value)"></select>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">תאריך יעד</span>
+                <input type="date" id="modal-deadline" onchange="saveItemField('deadline', this.value)">
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">נוצר</span>
+                <span id="modal-created"></span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">עודכן</span>
+                <span id="modal-updated"></span>
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button class="btn-primary btn-full" onclick="saveItemDescription()">שמור</button>
+              <button class="btn-danger btn-full" onclick="archiveCurrentItem()">ארכיב</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Item Modal -->
+    <div id="create-modal" class="modal hidden">
+      <div class="modal-overlay" onclick="closeCreateModal()"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>פריט חדש</h3>
+          <button class="btn-ghost" onclick="closeCreateModal()">✕</button>
+        </div>
+        <form id="create-form" onsubmit="submitCreateForm(event)">
+          <div class="form-group">
+            <label>סוג *</label>
+            <select id="create-type" required onchange="updateCreateFormFields()">
+              <option value="task">משימה</option>
+              <option value="project">פרויקט</option>
+              <option value="subtask">תת-משימה</option>
+              <option value="followup">מעקב</option>
+              <option value="reminder">תזכורת</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>כותרת *</label>
+            <input type="text" id="create-title" required placeholder="הזן כותרת...">
+          </div>
+          <div class="form-group">
+            <label>תיאור</label>
+            <textarea id="create-description" rows="3" placeholder="תיאור אופציונלי..."></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>אחראי</label>
+              <select id="create-assignee"></select>
+            </div>
+            <div class="form-group">
+              <label>עדיפות</label>
+              <select id="create-priority">
+                <option value="medium">בינוני</option>
+                <option value="high">גבוה</option>
+                <option value="critical">קריטי</option>
+                <option value="low">נמוך</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>תאריך יעד</label>
+            <input type="date" id="create-deadline">
+          </div>
+          <div class="form-group" id="create-followup-fields" style="display:none">
+            <label>ממתין לתגובה מ</label>
+            <select id="create-awaited-from"></select>
+            <label>תאריך צפוי</label>
+            <input type="date" id="create-expected-by">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-ghost" onclick="closeCreateModal()">ביטול</button>
+            <button type="submit" class="btn-primary">צור פריט</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ══════════ DASHBOARD PANEL ══════════ -->
+    <div id="panel-dashboard" class="panel hidden">
+      <div class="panel-header">
+        <h2>דשבורד</h2>
+        <button class="btn-secondary" onclick="loadDashboard()">🔄 רענן</button>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number" id="stat-open">-</div>
+          <div class="stat-label">פריטים פתוחים</div>
+        </div>
+        <div class="stat-card warning">
+          <div class="stat-number" id="stat-due-week">-</div>
+          <div class="stat-label">יעד השבוע</div>
+        </div>
+        <div class="stat-card danger">
+          <div class="stat-number" id="stat-overdue">-</div>
+          <div class="stat-label">באיחור</div>
+        </div>
+        <div class="stat-card success">
+          <div class="stat-number" id="stat-completed">-</div>
+          <div class="stat-label">הושלמו החודש</div>
+        </div>
+      </div>
+
+      <!-- Activity Table (management only) -->
+      <div id="activity-section" class="dashboard-section management-only hidden">
+        <h3>פעילות עובדים</h3>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>שם</th>
+              <th>תפקיד</th>
+              <th>משימות פתוחות</th>
+              <th>פעילות אחרונה</th>
+            </tr>
+          </thead>
+          <tbody id="activity-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Follow-ups tracker (management only) -->
+      <div id="followups-section" class="dashboard-section management-only hidden">
+        <h3>מעקב פתוח</h3>
+        <div id="followups-list"></div>
+      </div>
+    </div>
+
+    <!-- ══════════ REPORTS PANEL ══════════ -->
+    <div id="panel-reports" class="panel hidden">
+      <div class="panel-header">
+        <h2>דיווח סטטוס</h2>
+      </div>
+
+      <div class="reports-layout">
+        <!-- Submit Report -->
+        <div class="report-submit-card">
+          <h3>הגש דיווח</h3>
+          <div id="open-tasks-for-report"></div>
+          <form onsubmit="submitReport(event)">
+            <div class="form-group">
+              <label>דיווח סטטוס *</label>
+              <textarea id="report-text" rows="8" required
+                placeholder="פרט מה עשית, מה נשאר לעשות, ואם יש חסמים..."></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>תחילת תקופה</label>
+                <input type="date" id="report-period-start">
+              </div>
+              <div class="form-group">
+                <label>סיום תקופה</label>
+                <input type="date" id="report-period-end">
+              </div>
+            </div>
+            <button type="submit" class="btn-primary">שלח דיווח</button>
+          </form>
+          <div id="report-result" class="hidden"></div>
+        </div>
+
+        <!-- Report History -->
+        <div class="report-history-card">
+          <h3>היסטוריית דיווחים</h3>
+          <div id="report-history"></div>
+        </div>
+      </div>
+
+      <!-- Management: All Reports -->
+      <div id="all-reports-section" class="management-only hidden">
+        <h3>דיווחים של הצוות</h3>
+        <div id="all-reports-list"></div>
+      </div>
+    </div>
+
+    <!-- ══════════ ADMIN PANEL ══════════ -->
+    <div id="panel-admin" class="panel hidden">
+      <div class="panel-header">
+        <h2>לוח בקרה - ניהול</h2>
+      </div>
+
+      <div class="admin-tabs">
+        <button class="tab-btn active" onclick="showAdminTab('users')">משתמשים</button>
+        <button class="tab-btn" onclick="showAdminTab('teams')">צוותים</button>
+        <button class="tab-btn" onclick="showAdminTab('org')">עץ ארגוני</button>
+        <button class="tab-btn" onclick="showAdminTab('audit')">יומן ביקורת</button>
+      </div>
+
+      <!-- Users Tab -->
+      <div id="admin-tab-users" class="admin-tab-content active">
+        <div class="tab-header">
+          <h3>ניהול משתמשים</h3>
+          <button class="btn-primary" onclick="openCreateUserModal()">+ הוסף משתמש</button>
+        </div>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>שם</th>
+              <th>אימייל</th>
+              <th>תפקיד</th>
+              <th>מנהל ישיר</th>
+              <th>תדירות דיווח</th>
+              <th>סטטוס</th>
+              <th>פעולות</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Teams Tab -->
+      <div id="admin-tab-teams" class="admin-tab-content hidden">
+        <div class="tab-header">
+          <h3>ניהול צוותים</h3>
+          <button class="btn-primary" onclick="openCreateTeamModal()">+ צוות חדש</button>
+        </div>
+        <div id="teams-list"></div>
+      </div>
+
+      <!-- Org Tree Tab -->
+      <div id="admin-tab-org" class="admin-tab-content hidden">
+        <h3>עץ ארגוני</h3>
+        <div id="org-tree"></div>
+      </div>
+
+      <!-- Audit Log Tab -->
+      <div id="admin-tab-audit" class="admin-tab-content hidden">
+        <h3>יומן ביקורת</h3>
+        <div id="audit-log-list"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Create User Modal -->
+<div id="create-user-modal" class="modal hidden">
+  <div class="modal-overlay" onclick="closeCreateUserModal()"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>הוסף משתמש חדש</h3>
+      <button class="btn-ghost" onclick="closeCreateUserModal()">✕</button>
+    </div>
+    <form id="create-user-form" onsubmit="submitCreateUser(event)">
+      <div class="form-group">
+        <label>שם מלא *</label>
+        <input type="text" id="cu-name" required>
+      </div>
+      <div class="form-group">
+        <label>אימייל *</label>
+        <input type="email" id="cu-email" required dir="ltr">
+      </div>
+      <div class="form-group">
+        <label>סיסמה *</label>
+        <input type="password" id="cu-password" required dir="ltr">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>תפקיד *</label>
+          <select id="cu-role">
+            <option value="economist">כלכלן</option>
+            <option value="student">סטודנט</option>
+            <option value="section_head">ראש מדור</option>
+            <option value="office_manager">מנהלת משרד</option>
+            <option value="advisor">יועץ</option>
+            <option value="external">חיצוני</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>מנהל ישיר</label>
+          <select id="cu-parent"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>תדירות דיווח</label>
+        <select id="cu-report-freq">
+          <option value="weekly">שבועי</option>
+          <option value="daily">יומי</option>
+          <option value="none">ללא</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-ghost" onclick="closeCreateUserModal()">ביטול</button>
+        <button type="submit" class="btn-primary">צור משתמש</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Create Team Modal -->
+<div id="create-team-modal" class="modal hidden">
+  <div class="modal-overlay" onclick="closeCreateTeamModal()"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>צוות חדש</h3>
+      <button class="btn-ghost" onclick="closeCreateTeamModal()">✕</button>
+    </div>
+    <form id="create-team-form" onsubmit="submitCreateTeam(event)">
+      <div class="form-group">
+        <label>שם הצוות *</label>
+        <input type="text" id="ct-name" required>
+      </div>
+      <div class="form-group">
+        <label>תחום התמחות</label>
+        <input type="text" id="ct-focus" placeholder="למשל: ניתוח מחירי נכסים">
+      </div>
+      <div class="form-group">
+        <label>ראש צוות</label>
+        <select id="ct-lead"></select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-ghost" onclick="closeCreateTeamModal()">ביטול</button>
+        <button type="submit" class="btn-primary">צור צוות</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
