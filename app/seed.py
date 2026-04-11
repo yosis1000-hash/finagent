@@ -19,7 +19,7 @@ async def init_db():
         # Division Head
         division_head = User(
             name="יוסי סעדון",
-            email="yossi.saadon@boi.org.il",
+            email="yossef.saadon@gmail.com",
             hashed_password=hash_password("Admin1234!"),
             role_type=RoleType.division_head,
             report_frequency=ReportFrequency.none,
