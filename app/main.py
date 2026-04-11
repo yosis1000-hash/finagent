@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,6 +53,11 @@ app.include_router(reports.router)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.get("/")
 async def serve_index():
     return FileResponse("static/index.html")
@@ -60,7 +65,7 @@ async def serve_index():
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    # For SPA routing - serve index.html for all non-API paths
-    if not full_path.startswith("api/") and not full_path.startswith("static/"):
-        return FileResponse("static/index.html")
-    return FileResponse(f"static/{full_path}")
+    # API paths are handled by routers above — only serve SPA for frontend routes
+    if full_path.startswith("api/"):
+        return Response(status_code=404)
+    return FileResponse("static/index.html")
