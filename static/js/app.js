@@ -138,7 +138,9 @@ function showPanel(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
-  document.getElementById(`panel-${name}`).classList.add('active');
+  const panel = document.getElementById(`panel-${name}`);
+  panel.classList.remove('hidden');
+  panel.classList.add('active');
   document.querySelector(`[data-panel="${name}"]`)?.classList.add('active');
 
   if (name === 'tasks') loadItems();
