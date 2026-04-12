@@ -502,72 +502,59 @@ body {
 .org-section-title {
   font-size: 12px; font-weight: 700; color: var(--gray-500);
   text-transform: uppercase; letter-spacing: 1px;
-  margin-bottom: 28px; padding-bottom: 8px;
+  margin-bottom: 0; padding-bottom: 8px;
   border-bottom: 2px solid var(--gray-200);
 }
-.org-scroll-wrap { overflow-x: auto; padding: 8px 0 24px; }
 
-/* ── Proven float-based org chart tree ── */
-.org-chart, .org-chart ul {
-  margin: 0; padding: 0; list-style: none; text-align: center;
-}
-.org-chart { display: inline-block; min-width: 100%; }
-.org-chart ul { display: flex; justify-content: center; padding-top: 28px; position: relative; }
-
-/* Vertical line down from parent to horizontal bar */
-.org-chart ul::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 50%;
-  border-left: 2px solid var(--gray-300);
-  height: 28px;
-}
-.org-chart li {
-  display: flex; flex-direction: column; align-items: center;
-  padding: 28px 10px 0;
+/* Canvas: absolutely positioned nodes + SVG overlay */
+.org-canvas {
+  overflow-x: auto;
+  min-height: 160px;
   position: relative;
 }
-/* Horizontal connectors between siblings */
-.org-chart li::before, .org-chart li::after {
-  content: '';
-  position: absolute;
-  top: 0; right: 50%;
-  border-top: 2px solid var(--gray-300);
-  width: 50%; height: 28px;
-}
-.org-chart li::after {
-  right: auto; left: 50%;
-  border-left: 2px solid var(--gray-300);
-}
-.org-chart li:only-child::after,
-.org-chart li:only-child::before { display: none; }
-.org-chart li:first-child::before,
-.org-chart li:last-child::after  { border: 0; }
-.org-chart li:last-child::before {
-  border-right: 2px solid var(--gray-300);
-  border-radius: 0 5px 0 0;
-}
-.org-chart li:first-child::after { border-radius: 5px 0 0 0; }
 
-/* The card */
+/* The card — absolute positioned inside canvas */
 .org-card {
+  position: absolute;
   background: white;
   border: 1.5px solid var(--gray-200);
   border-radius: 12px;
-  padding: 14px 16px 10px;
-  min-width: 148px;
-  max-width: 180px;
+  padding: 14px 14px 10px;
   text-align: center;
   cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  transition: border-color .15s, box-shadow .15s, transform .1s;
-  position: relative;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  transition: border-color .15s, box-shadow .15s, transform .12s;
+  user-select: none;
 }
 .org-card:hover {
   border-color: var(--primary);
-  box-shadow: 0 4px 16px rgba(99,102,241,0.15);
+  box-shadow: 0 4px 18px rgba(99,102,241,0.18);
   transform: translateY(-2px);
+  z-index: 2;
 }
+.org-card.org-dragging {
+  opacity: .45; transform: scale(.97);
+}
+.org-card.org-drop-target {
+  border-color: #10b981; border-width: 2px;
+  box-shadow: 0 0 0 4px rgba(16,185,129,.18);
+}
+/* Action buttons — hidden by default, shown on hover */
+.org-card-actions {
+  display: flex; justify-content: center; gap: 4px;
+  margin-top: 8px; opacity: 0;
+  transition: opacity .15s;
+  border-top: 1px solid var(--gray-100); padding-top: 6px;
+}
+.org-card:hover .org-card-actions { opacity: 1; }
+.org-action-btn {
+  background: var(--gray-100); border: none; border-radius: 6px;
+  padding: 3px 6px; cursor: pointer; font-size: 13px;
+  transition: background .1s;
+}
+.org-action-btn:hover { background: var(--gray-200); }
+.org-action-danger:hover { background: #fee2e2; }
+
 .org-card-role {
   font-size: 9px; font-weight: 800; color: var(--primary);
   letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;
@@ -694,6 +681,35 @@ body {
 .settings-section { margin-bottom: 28px; }
 .settings-section h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--gray-700); }
 .settings-roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+
+/* ─── Confirm Dialog ─────────────────────────────── */
+.confirm-dialog {
+  position: fixed; inset: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: center;
+}
+.confirm-dialog.hidden { display: none; }
+.confirm-backdrop {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.45);
+}
+.confirm-box {
+  position: relative; background: white; border-radius: 16px;
+  padding: 32px 28px 24px; max-width: 400px; width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  animation: confirmPop .15s ease-out;
+}
+@keyframes confirmPop {
+  from { transform: scale(.92); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+.confirm-icon { font-size: 36px; margin-bottom: 12px; }
+.confirm-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--gray-900); }
+.confirm-body  { font-size: 14px; color: var(--gray-600); margin-bottom: 24px; line-height: 1.5; }
+.confirm-actions { display: flex; gap: 10px; justify-content: center; }
+.btn-danger { background: var(--danger); color: white; border: none;
+  padding: 8px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;
+  transition: opacity .15s; }
+.btn-danger:hover { opacity: .85; }
 
 /* ─── Toast ──────────────────────────────────────── */
 .toast {

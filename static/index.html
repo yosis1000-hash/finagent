@@ -480,6 +480,7 @@
       <button class="btn-ghost" onclick="closeCreateUserModal()">✕</button>
     </div>
     <form id="create-user-form" onsubmit="submitCreateUser(event)">
+      <input type="hidden" id="cu-parent-preset">
       <div class="form-group">
         <label>שם מלא *</label>
         <input type="text" id="cu-name" required>
@@ -551,6 +552,20 @@
         <button type="submit" class="btn-primary">צור צוות</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div id="confirm-dialog" class="confirm-dialog hidden">
+  <div class="confirm-backdrop" onclick="rejectConfirm()"></div>
+  <div class="confirm-box">
+    <div class="confirm-icon" id="confirm-icon">⚠️</div>
+    <div class="confirm-title" id="confirm-title"></div>
+    <div class="confirm-body" id="confirm-body"></div>
+    <div class="confirm-actions">
+      <button class="btn-ghost" onclick="rejectConfirm()" id="confirm-cancel-btn">ביטול</button>
+      <button class="btn-primary" onclick="acceptConfirm()" id="confirm-ok-btn">אישור</button>
+    </div>
   </div>
 </div>
 

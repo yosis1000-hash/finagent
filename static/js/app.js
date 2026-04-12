@@ -717,113 +717,327 @@ async function submitAddMember() {
   }
 }
 
-// Org tree node data cache (for drawer)
-let _orgNodeCache = {};
+// ─── Confirm Dialog ───────────────────────────────
+let _confirmResolve = null;
+function showConfirm({ title, body, okLabel = 'אישור', okClass = 'btn-primary', icon = '⚠️' }) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-body').textContent = body;
+    document.getElementById('confirm-icon').textContent = icon;
+    document.getElementById('confirm-ok-btn').className = `btn-primary ${okClass}`;
+    document.getElementById('confirm-ok-btn').textContent = okLabel;
+    document.getElementById('confirm-dialog').classList.remove('hidden');
+  });
+}
+function acceptConfirm() {
+  document.getElementById('confirm-dialog').classList.add('hidden');
+  _confirmResolve?.(true); _confirmResolve = null;
+}
+function rejectConfirm() {
+  document.getElementById('confirm-dialog').classList.add('hidden');
+  _confirmResolve?.(false); _confirmResolve = null;
+}
 
+// ─── Org Chart constants ──────────────────────────
+const ORG_W = 158;   // card width
+const ORG_H = 108;   // card height
+const ORG_HG = 28;   // horizontal gap between sibling subtrees
+const ORG_VG = 72;   // vertical gap between levels
+
+let _orgNodeCache = {};
+let _orgIsDivHead = false;
+let _orgDragId = null;
+
+// ── Layout helpers ─────────────────────────────────
+function orgSubtreeWidth(node) {
+  if (!node.children?.length) return ORG_W;
+  const cw = node.children.reduce((s, c, i) => s + orgSubtreeWidth(c) + (i > 0 ? ORG_HG : 0), 0);
+  return Math.max(ORG_W, cw);
+}
+
+function orgPositionNodes(node, x, y) {
+  const w = orgSubtreeWidth(node);
+  node._x = x + (w - ORG_W) / 2;
+  node._y = y;
+  if (node.children?.length) {
+    let cx = x;
+    node.children.forEach((child, i) => {
+      if (i > 0) cx += ORG_HG;
+      orgPositionNodes(child, cx, y + ORG_H + ORG_VG);
+      cx += orgSubtreeWidth(child);
+    });
+  }
+}
+
+function orgTotalSize(roots) {
+  let maxX = 0, maxY = 0;
+  const scan = n => {
+    maxX = Math.max(maxX, n._x + ORG_W);
+    maxY = Math.max(maxY, n._y + ORG_H);
+    n.children?.forEach(scan);
+  };
+  roots.forEach(scan);
+  return { width: maxX, height: maxY };
+}
+
+function orgFlattenInto(nodes, map) {
+  nodes.forEach(n => { map[n.id] = n; if (n.children?.length) orgFlattenInto(n.children, map); });
+}
+
+// ── Main loader ────────────────────────────────────
 async function loadOrgTree() {
   const el = document.getElementById('org-tree');
   el.innerHTML = '<p style="color:var(--gray-400)">טוען...</p>';
+  _orgIsDivHead = currentUser?.role_type === 'division_head';
   try {
     const [tree, teams] = await Promise.all([API.orgTree(), API.teams()]);
     _orgNodeCache = {};
+    orgFlattenInto(tree, _orgNodeCache);
     el.innerHTML = '';
 
-    // ── Formal hierarchy ──
+    // ── Formal hierarchy ──────────────────────────
     const formalSection = document.createElement('div');
     formalSection.className = 'org-section';
-    formalSection.innerHTML = '<h4 class="org-section-title">מבנה היררכי רשמי</h4>';
+    const fsHeader = document.createElement('div');
+    fsHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:28px';
+    fsHeader.innerHTML = `<h4 class="org-section-title" style="margin:0">מבנה היררכי רשמי</h4>`;
+    if (_orgIsDivHead) {
+      const addBtn = document.createElement('button');
+      addBtn.className = 'btn-ghost btn-sm';
+      addBtn.textContent = '+ הוסף ללא מנהל';
+      addBtn.onclick = () => openAddUserInTree(null);
+      fsHeader.appendChild(addBtn);
+    }
+    formalSection.appendChild(fsHeader);
 
-    // Build a proper ul.org-chart > li structure
-    const rootUl = document.createElement('ul');
-    rootUl.className = 'org-chart';
-    tree.forEach(root => rootUl.appendChild(buildOrgNode(root)));
-
-    const scrollWrap = document.createElement('div');
-    scrollWrap.className = 'org-scroll-wrap';
-    scrollWrap.appendChild(rootUl);
-    formalSection.appendChild(scrollWrap);
+    const canvas = document.createElement('div');
+    canvas.className = 'org-canvas';
+    formalSection.appendChild(canvas);
     el.appendChild(formalSection);
 
-    // ── Teams / informal ──
+    renderOrgCanvas(canvas, tree);
+
+    // ── Teams section ─────────────────────────────
     const teamsSection = document.createElement('div');
     teamsSection.className = 'org-section';
     teamsSection.innerHTML = '<h4 class="org-section-title">צוותים אד-הוק</h4>';
-
     if (teams.length === 0) {
-      teamsSection.innerHTML += '<p style="color:var(--gray-400);font-size:13px">אין צוותים מוגדרים עדיין</p>';
+      teamsSection.innerHTML += '<p style="color:var(--gray-400);font-size:13px">אין צוותים מוגדרים — צור צוות בטאב "צוותים"</p>';
     } else {
-      const teamsGrid = document.createElement('div');
-      teamsGrid.className = 'org-teams-grid';
+      const grid = document.createElement('div');
+      grid.className = 'org-teams-grid';
       for (const team of teams) {
         let detail = { members: [] };
         try { detail = await API.teamDetail(team.id); } catch {}
-        const card = document.createElement('div');
-        card.className = 'org-team-card';
-        card.innerHTML = `
-          <div class="org-team-header">
-            <div class="org-team-name">${escHtml(team.name)}</div>
-            ${team.focus ? `<div class="org-team-focus">${escHtml(team.focus)}</div>` : ''}
-          </div>
-          <div class="org-team-members">
-            ${detail.members.map(m => `
-              <div class="org-team-member" onclick="openPersonDrawer(${m.id})" style="cursor:pointer">
-                <span class="member-avatar">${m.name[0]}</span>
-                <div>
-                  <div style="font-size:13px;font-weight:600">${escHtml(m.name)}</div>
-                  <div style="font-size:11px;color:var(--gray-400)">${getRoleLabel(m.role_type)}</div>
-                </div>
-              </div>
-            `).join('') || '<span style="color:var(--gray-400);font-size:12px">אין חברים</span>'}
-          </div>
-        `;
-        teamsGrid.appendChild(card);
+        grid.appendChild(buildTeamOrgCard(team, detail));
       }
-      teamsSection.appendChild(teamsGrid);
+      teamsSection.appendChild(grid);
     }
     el.appendChild(teamsSection);
 
   } catch (err) {
     document.getElementById('org-tree').innerHTML =
-      `<p style="color:var(--danger)">שגיאה בטעינת עץ ארגוני: ${escHtml(err.message)}</p>`;
+      `<p style="color:var(--danger)">שגיאה: ${escHtml(err.message)}</p>`;
   }
 }
 
-function buildOrgNode(node) {
-  // Cache node data for drawer
-  _orgNodeCache[node.id] = node;
+// ── Render canvas (absolute layout + SVG lines) ────
+function renderOrgCanvas(canvas, roots) {
+  canvas.innerHTML = '';
 
-  const li = document.createElement('li');
+  // Calculate positions
+  let startX = 0;
+  roots.forEach((root, i) => {
+    if (i > 0) startX += ORG_HG;
+    orgPositionNodes(root, startX, 0);
+    startX += orgSubtreeWidth(root);
+  });
 
-  // The clickable card
-  const card = document.createElement('div');
-  card.className = 'org-card';
-  card.onclick = () => openPersonDrawer(node.id);
+  const PAD = 24;
+  const { width, height } = orgTotalSize(roots);
+  canvas.style.cssText = `position:relative; width:${width + PAD*2}px; height:${height + PAD*2}px; margin:0 auto;`;
 
-  const openBadge = node.open_tasks > 0
-    ? `<span class="org-badge-open">${node.open_tasks} פתוחות</span>` : '';
-  const doneBadge = node.done_tasks > 0
-    ? `<span class="org-badge-done">${node.done_tasks} הושלמו</span>` : '';
-  const teamBadges = (node.teams || []).map(t =>
-    `<span class="org-badge-team">${escHtml(t)}</span>`
-  ).join('');
+  // SVG for bezier connectors
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible';
+  canvas.appendChild(svg);
 
-  card.innerHTML = `
-    <div class="org-card-role">${getRoleLabel(node.role_type)}</div>
-    <div class="org-card-avatar">${node.name[0]}</div>
-    <div class="org-card-name">${escHtml(node.name)}</div>
-    ${(openBadge || doneBadge || teamBadges) ? `
-      <div class="org-card-badges">${openBadge}${doneBadge}${teamBadges}</div>
-    ` : ''}
-    <div class="org-card-hint">לחץ לפרטים</div>
-  `;
-  li.appendChild(card);
+  // Render nodes recursively
+  function renderNode(node) {
+    _orgNodeCache[node.id] = node;
 
-  if (node.children?.length) {
-    const ul = document.createElement('ul');
-    node.children.forEach(c => ul.appendChild(buildOrgNode(c)));
-    li.appendChild(ul);
+    // Draw connector from this node to its children
+    if (node.children?.length) {
+      const px = node._x + PAD + ORG_W / 2;
+      const py = node._y + PAD + ORG_H;
+      node.children.forEach(child => {
+        const cx = child._x + PAD + ORG_W / 2;
+        const cy = child._y + PAD;
+        const my = (py + cy) / 2;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M${px},${py} C${px},${my} ${cx},${my} ${cx},${cy}`);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', '#c7d2fe');
+        path.setAttribute('stroke-width', '2');
+        path.setAttribute('stroke-linecap', 'round');
+        svg.appendChild(path);
+      });
+    }
+
+    // Card
+    const card = document.createElement('div');
+    card.className = 'org-card';
+    card.id = `org-card-${node.id}`;
+    card.style.cssText = `left:${node._x + PAD}px; top:${node._y + PAD}px; width:${ORG_W}px;`;
+    card.dataset.nodeId = node.id;
+
+    const openBadge = node.open_tasks > 0 ? `<span class="org-badge-open">${node.open_tasks} פתוחות</span>` : '';
+    const doneBadge = node.done_tasks > 0 ? `<span class="org-badge-done">${node.done_tasks} הושלמו</span>` : '';
+    const teamBadges = (node.teams || []).map(t => `<span class="org-badge-team">${escHtml(t)}</span>`).join('');
+
+    const actionsHtml = _orgIsDivHead ? `
+      <div class="org-card-actions">
+        <button class="org-action-btn" title="הוסף תחתיו" onclick="event.stopPropagation();openAddUserInTree(${node.id})">➕</button>
+        <button class="org-action-btn" title="ערוך" onclick="event.stopPropagation();openEditUserModal(${node.id})">✏️</button>
+        <button class="org-action-btn org-action-danger" title="הסר מהאגף" onclick="event.stopPropagation();confirmDeactivateFromTree(${node.id},'${escHtml(node.name)}')">🗑️</button>
+      </div>` : `<div class="org-card-hint">לחץ לפרטים</div>`;
+
+    card.innerHTML = `
+      <div class="org-card-role">${getRoleLabel(node.role_type)}</div>
+      <div class="org-card-avatar">${node.name[0]}</div>
+      <div class="org-card-name">${escHtml(node.name)}</div>
+      ${(openBadge || doneBadge || teamBadges) ? `<div class="org-card-badges">${openBadge}${doneBadge}${teamBadges}</div>` : ''}
+      ${actionsHtml}
+    `;
+
+    // Drag & drop (division_head only)
+    if (_orgIsDivHead) {
+      card.draggable = true;
+      card.addEventListener('dragstart', e => orgDragStart(e, node.id));
+      card.addEventListener('dragend',   () => orgDragEnd());
+      card.addEventListener('dragover',  e => orgDragOver(e, node.id));
+      card.addEventListener('dragleave', e => orgDragLeave(e));
+      card.addEventListener('drop',      e => orgDrop(e, node.id));
+    }
+
+    card.addEventListener('click', () => openPersonDrawer(node.id));
+    canvas.appendChild(card);
+
+    node.children?.forEach(renderNode);
   }
-  return li;
+  roots.forEach(renderNode);
+}
+
+// ── Drag & Drop ────────────────────────────────────
+function orgDragStart(e, nodeId) {
+  _orgDragId = nodeId;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => document.getElementById(`org-card-${nodeId}`)?.classList.add('org-dragging'), 0);
+}
+function orgDragEnd() {
+  document.querySelectorAll('.org-card').forEach(c => {
+    c.classList.remove('org-dragging', 'org-drop-target');
+  });
+  _orgDragId = null;
+}
+function orgDragOver(e, targetId) {
+  if (!_orgDragId || _orgDragId === targetId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.getElementById(`org-card-${targetId}`)?.classList.add('org-drop-target');
+}
+function orgDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.classList.remove('org-drop-target');
+  }
+}
+async function orgDrop(e, targetId) {
+  e.preventDefault();
+  const draggedId = _orgDragId;
+  orgDragEnd();
+  if (!draggedId || draggedId === targetId) return;
+
+  const dragged = _orgNodeCache[draggedId];
+  const target  = _orgNodeCache[targetId];
+  if (!dragged || !target) return;
+
+  // Prevent dropping onto own descendant
+  const isDesc = n => n?.children?.some(c => c.id === draggedId || isDesc(c));
+  if (isDesc(dragged)) { showToast('לא ניתן להעביר לתוך צאצא', 'error'); return; }
+
+  const ok = await showConfirm({
+    icon: '🔀',
+    title: 'שינוי מבנה ארגוני',
+    body: `להעביר את "${dragged.name}" כדי שידווח ישירות ל-"${target.name}"?`,
+    okLabel: 'כן, העבר',
+  });
+  if (!ok) return;
+
+  try {
+    await API.updateUser(draggedId, { parent_id: targetId });
+    showToast(`${dragged.name} הועבר תחת ${target.name}`, 'success');
+    await loadUsers();
+    loadOrgTree();
+  } catch (err) {
+    showToast('שגיאה: ' + err.message, 'error');
+  }
+}
+
+// ── In-tree management ─────────────────────────────
+function openAddUserInTree(parentId) {
+  document.getElementById('cu-parent-preset').value = parentId ?? '';
+  openCreateUserModal();
+  // Pre-select parent in the dropdown after it's populated
+  if (parentId) {
+    setTimeout(() => {
+      const sel = document.getElementById('cu-parent');
+      if (sel) sel.value = parentId;
+    }, 50);
+  }
+}
+
+async function confirmDeactivateFromTree(userId, name) {
+  const ok = await showConfirm({
+    icon: '🗑️',
+    title: 'הסרת עובד מהאגף',
+    body: `להשבית את "${name}"? הוא לא יוכל להתחבר יותר למערכת.`,
+    okLabel: 'כן, השבת',
+    okClass: 'btn-danger',
+  });
+  if (!ok) return;
+  try {
+    await API.deactivateUser(userId);
+    showToast(`${name} הושבת`, 'success');
+    await loadUsers();
+    loadOrgTree();
+  } catch (err) {
+    showToast('שגיאה: ' + err.message, 'error');
+  }
+}
+
+// ── Teams section in org view ─────────────────────
+function buildTeamOrgCard(team, detail) {
+  const card = document.createElement('div');
+  card.className = 'org-team-card';
+  card.innerHTML = `
+    <div class="org-team-header">
+      <div class="org-team-name">${escHtml(team.name)}</div>
+      ${team.focus ? `<div class="org-team-focus">${escHtml(team.focus)}</div>` : ''}
+    </div>
+    <div class="org-team-members">
+      ${detail.members.map(m => `
+        <div class="org-team-member" onclick="openPersonDrawer(${m.id})" style="cursor:pointer">
+          <span class="member-avatar">${m.name[0]}</span>
+          <div>
+            <div style="font-size:13px;font-weight:600">${escHtml(m.name)}</div>
+            <div style="font-size:11px;color:var(--gray-400)">${getRoleLabel(m.role_type)}</div>
+          </div>
+        </div>
+      `).join('') || '<span style="color:var(--gray-400);font-size:12px">אין חברים</span>'}
+    </div>
+  `;
+  return card;
 }
 
 // ─── Person Drawer ────────────────────────────────
@@ -837,55 +1051,46 @@ async function openPersonDrawer(userId) {
     document.getElementById('drawer-name').textContent = node.name;
     document.getElementById('drawer-email').textContent = node.email || '';
     document.getElementById('drawer-stats').innerHTML = `
-      <span class="org-badge-open" style="font-size:13px;padding:4px 12px">${node.open_tasks || 0} משימות פתוחות</span>
+      <span class="org-badge-open" style="font-size:13px;padding:4px 12px">${node.open_tasks || 0} פתוחות</span>
       <span class="org-badge-done" style="font-size:13px;padding:4px 12px">${node.done_tasks || 0} הושלמו</span>
     `;
   }
 
   const body = document.getElementById('drawer-body');
-  body.innerHTML = '<p style="color:var(--gray-400)">טוען משימות...</p>';
-
+  body.innerHTML = '<p style="color:var(--gray-400)">טוען...</p>';
   try {
-    // Load all items and filter by this user
-    const items = await API.items({ assignee_id: userId });
-    const userItems = items.filter ? items : (items || []);
-
+    const items = await API.items({});
+    const userItems = (items || []).filter(i => i.assignee_user_id === userId);
     if (userItems.length === 0) {
       body.innerHTML = '<p style="color:var(--gray-400)">אין פריטים משויכים</p>';
       return;
     }
-
     const open = userItems.filter(i => !['completed','cancelled','archived','closed'].includes(i.status));
     const done = userItems.filter(i => i.status === 'completed');
-
     body.innerHTML = '';
 
     if (open.length > 0) {
-      const openSection = document.createElement('div');
-      openSection.className = 'drawer-section';
-      openSection.innerHTML = `
-        <div class="drawer-section-title">פתוחות (${open.length})</div>
-        ${open.map(i => drawerItemRow(i)).join('')}
-      `;
-      body.appendChild(openSection);
+      const sec = document.createElement('div');
+      sec.className = 'drawer-section';
+      sec.innerHTML = `<div class="drawer-section-title">פתוחות (${open.length})</div>${open.map(drawerItemRow).join('')}`;
+      body.appendChild(sec);
     }
-
     if (done.length > 0) {
-      const doneWrap = document.createElement('div');
-      doneWrap.className = 'drawer-section';
-      const doneToggle = document.createElement('div');
-      doneToggle.className = 'drawer-section-title drawer-toggle';
-      doneToggle.innerHTML = `<span>הושלמו (${done.length})</span> <span class="toggle-icon">▶</span>`;
-      const doneList = document.createElement('div');
-      doneList.className = 'drawer-done-list hidden';
-      doneList.innerHTML = done.slice(0, 30).map(i => drawerItemRow(i)).join('');
-      doneToggle.onclick = () => {
-        const collapsed = doneList.classList.toggle('hidden');
-        doneToggle.querySelector('.toggle-icon').textContent = collapsed ? '▶' : '▼';
+      const wrap = document.createElement('div');
+      wrap.className = 'drawer-section';
+      const toggle = document.createElement('div');
+      toggle.className = 'drawer-section-title drawer-toggle';
+      toggle.innerHTML = `<span>הושלמו (${done.length})</span><span class="toggle-icon">▶</span>`;
+      const list = document.createElement('div');
+      list.className = 'hidden';
+      list.innerHTML = done.slice(0, 30).map(drawerItemRow).join('');
+      toggle.onclick = () => {
+        list.classList.toggle('hidden');
+        toggle.querySelector('.toggle-icon').textContent = list.classList.contains('hidden') ? '▶' : '▼';
       };
-      doneWrap.appendChild(doneToggle);
-      doneWrap.appendChild(doneList);
-      body.appendChild(doneWrap);
+      wrap.appendChild(toggle);
+      wrap.appendChild(list);
+      body.appendChild(wrap);
     }
   } catch (err) {
     body.innerHTML = `<p style="color:var(--danger)">שגיאה: ${escHtml(err.message)}</p>`;
@@ -893,11 +1098,10 @@ async function openPersonDrawer(userId) {
 }
 
 function drawerItemRow(item) {
-  const priority = item.priority
-    ? `<span class="priority-badge ${item.priority}">${PRIORITY_LABELS[item.priority]}</span>` : '';
+  const priority = item.priority ? `<span class="priority-badge ${item.priority}">${PRIORITY_LABELS[item.priority]}</span>` : '';
   const deadline = item.deadline ? `<span style="font-size:11px;color:var(--gray-400)">⏰ ${formatDate(item.deadline)}</span>` : '';
   return `
-    <div class="drawer-item" onclick="closePersonDrawer(); openItemModal(${item.id})">
+    <div class="drawer-item" onclick="closePersonDrawer();openItemModal(${item.id})">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span class="type-badge ${item.type}">${TYPE_LABELS[item.type]}</span>
         <span class="drawer-item-title">${escHtml(item.title)}</span>
@@ -906,8 +1110,7 @@ function drawerItemRow(item) {
         <span class="status-badge ${item.status}">${STATUS_LABELS[item.status]}</span>
         ${priority}${deadline}
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function closePersonDrawer() {
