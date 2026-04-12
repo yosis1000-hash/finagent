@@ -1,10 +1,26 @@
+import json
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import User, RoleType, AuditLog
+from app.models.models import User, RoleType, AuditLog, OrgConfig, WorkItem, ItemStatus, Team, TeamMember
 from app.schemas.schemas import UserCreate, UserUpdate, UserOut
 from app.auth.auth import get_current_user, hash_password, require_roles
+
+DEFAULT_CONFIG = {
+    "org_name": "אגף",
+    "role_labels": {
+        "division_head": "ראש אגף",
+        "department_head": "ראש מחלקה",
+        "section_head": "ראש תחום",
+        "office_manager": "מנהלת משרד",
+        "economist": "כלכלן",
+        "student": "סטודנט",
+        "advisor": "יועץ",
+        "team_lead": "ראש צוות",
+        "external": "חיצוני",
+    }
+}
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -32,24 +48,80 @@ def list_users(
         return [current_user]
 
 
+@router.get("/config")
+def get_config(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    row = db.query(OrgConfig).first()
+    if not row:
+        return DEFAULT_CONFIG
+    stored = json.loads(row.config_json)
+    # Merge with defaults so new keys are always present
+    merged = {**DEFAULT_CONFIG, **stored}
+    merged["role_labels"] = {**DEFAULT_CONFIG["role_labels"], **stored.get("role_labels", {})}
+    return merged
+
+
+@router.put("/config")
+def update_config(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleType.division_head, RoleType.office_manager)),
+):
+    row = db.query(OrgConfig).first()
+    if not row:
+        row = OrgConfig(config_json=json.dumps(payload))
+        db.add(row)
+    else:
+        row.config_json = json.dumps(payload)
+    db.commit()
+    return payload
+
+
 @router.get("/org-tree")
 def get_org_tree(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Returns the full org hierarchy as a nested structure."""
+    """Returns the full org hierarchy as a nested structure with task stats."""
     if current_user.role_type not in (RoleType.division_head, RoleType.office_manager):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     all_users = db.query(User).filter(User.is_active == True).all()
+    closed = [ItemStatus.completed, ItemStatus.closed, ItemStatus.cancelled, ItemStatus.archived]
+
+    # Precompute task stats per user
+    def task_stats(user_id: int):
+        open_count = db.query(WorkItem).filter(
+            WorkItem.assignee_user_id == user_id,
+            WorkItem.status.notin_(closed),
+        ).count()
+        done_count = db.query(WorkItem).filter(
+            WorkItem.assignee_user_id == user_id,
+            WorkItem.status == ItemStatus.completed,
+        ).count()
+        return open_count, done_count
+
+    # Precompute team memberships per user
+    memberships = db.query(TeamMember).all()
+    teams = db.query(Team).filter(Team.is_active == True).all()
+    team_map = {t.id: t.name for t in teams}
+    user_teams: dict = {}
+    for m in memberships:
+        user_teams.setdefault(m.user_id, []).append(team_map.get(m.team_id, ""))
 
     def build_node(user: User):
         children = [u for u in all_users if u.parent_id == user.id]
+        open_t, done_t = task_stats(user.id)
         return {
             "id": user.id,
             "name": user.name,
             "email": user.email,
             "role_type": user.role_type,
+            "open_tasks": open_t,
+            "done_tasks": done_t,
+            "teams": user_teams.get(user.id, []),
             "children": [build_node(c) for c in children],
         }
 

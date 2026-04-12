@@ -247,6 +247,15 @@ class ReportSubmission(Base):
     user: Mapped[User] = relationship("User", back_populates="report_submissions")
 
 
+class OrgConfig(Base):
+    """Single-row table holding org-wide configuration as a JSON blob."""
+    __tablename__ = "org_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    config_json: Mapped[str] = mapped_column(Text, default='{}')
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Notification(Base):
     __tablename__ = "notifications"
 

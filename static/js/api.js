@@ -90,4 +90,11 @@ const API = {
 
   // Audit
   auditLogs: () => API.get('/api/users/audit-logs'),
+
+  // Org Config
+  orgConfig: () => API.get('/api/users/config'),
+  saveOrgConfig: (data) => API.put('/api/users/config', data),
+
+  // Team detail (with members)
+  teamDetail: (id) => API.get(`/api/teams/${id}`),
 };

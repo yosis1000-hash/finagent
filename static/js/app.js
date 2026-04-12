@@ -7,18 +7,34 @@ let allUsers = [];
 let currentItemId = null;
 let currentView = 'list';
 
-// ─── Role Labels ──────────────────────────────────
-const ROLE_LABELS = {
-  division_head: 'ראש מחלקה',
-  department_head: 'ראש אגף',
-  section_head: 'ראש מדור',
-  office_manager: 'מנהלת משרד',
-  economist: 'כלכלן',
-  student: 'סטודנט',
-  advisor: 'יועץ',
-  team_lead: 'ראש צוות',
-  external: 'חיצוני',
+// ─── Org Config (loaded from server, with defaults) ───
+let appConfig = {
+  org_name: 'אגף',
+  role_labels: {
+    division_head: 'ראש אגף',
+    department_head: 'ראש מחלקה',
+    section_head: 'ראש תחום',
+    office_manager: 'מנהלת משרד',
+    economist: 'כלכלן',
+    student: 'סטודנט',
+    advisor: 'יועץ',
+    team_lead: 'ראש צוות',
+    external: 'חיצוני',
+  }
 };
+
+function getRoleLabel(role) {
+  return appConfig.role_labels[role] || role;
+}
+
+async function loadOrgConfig() {
+  try {
+    appConfig = await API.orgConfig();
+  } catch { /* use defaults */ }
+}
+
+// Legacy alias used in several places
+const ROLE_LABELS = new Proxy({}, { get: (_, key) => getRoleLabel(key) });
 
 const TYPE_LABELS = {
   project: 'פרויקט',
@@ -69,7 +85,7 @@ function showLogin() {
   document.getElementById('login-screen').classList.remove('hidden');
 }
 
-function initApp(user) {
+async function initApp(user) {
   currentUser = user;
   localStorage.setItem('fa_user', JSON.stringify(user));
   document.getElementById('login-screen').classList.add('hidden');
@@ -87,9 +103,9 @@ function initApp(user) {
     }
   });
 
-  loadUsers().then(() => {
-    showPanel('tasks');
-  });
+  await loadOrgConfig();
+  await loadUsers();
+  showPanel('tasks');
 }
 
 // ─── Login ────────────────────────────────────────
@@ -589,6 +605,7 @@ function showAdminTab(tab) {
 
   if (tab === 'org') loadOrgTree();
   if (tab === 'audit') loadAuditLog();
+  if (tab === 'settings') populateSettingsForm();
 }
 
 async function loadUsersTable() {
@@ -618,46 +635,172 @@ async function loadUsersTable() {
 }
 
 async function loadTeamsList() {
+  const list = document.getElementById('teams-list');
   try {
     const teams = await API.teams();
-    const list = document.getElementById('teams-list');
-    list.innerHTML = teams.map(t => `
-      <div class="team-card">
-        <div style="display:flex;justify-content:space-between">
-          <h4>${escHtml(t.name)}</h4>
-          <span style="color:var(--gray-400);font-size:12px">${t.is_active ? 'פעיל' : 'לא פעיל'}</span>
+    if (teams.length === 0) {
+      list.innerHTML = '<p style="color:var(--gray-400);margin-bottom:16px">אין צוותים עדיין — לחץ "+ צוות חדש" ליצירה</p>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const t of teams) {
+      let detail = { members: [] };
+      try { detail = await API.teamDetail(t.id); } catch {}
+      const leadName = allUsers.find(u => u.id === t.lead_user_id)?.name;
+      const card = document.createElement('div');
+      card.className = 'team-card';
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <h4 style="margin:0">${escHtml(t.name)}</h4>
+            ${t.focus ? `<p style="color:var(--gray-600);font-size:13px;margin:4px 0 0">${escHtml(t.focus)}</p>` : ''}
+            ${leadName ? `<p style="font-size:12px;margin:4px 0 0;color:var(--gray-500)">ראש צוות: ${escHtml(leadName)}</p>` : ''}
+          </div>
+          <button class="btn-ghost btn-sm" onclick="openAddMemberModal(${t.id}, '${escHtml(t.name)}')">+ הוסף חבר</button>
         </div>
-        ${t.focus ? `<p style="color:var(--gray-600);font-size:13px">${escHtml(t.focus)}</p>` : ''}
-        ${t.lead_user_id ? `<p style="font-size:12px">ראש צוות: ${escHtml(allUsers.find(u=>u.id===t.lead_user_id)?.name || String(t.lead_user_id))}</p>` : ''}
-      </div>
-    `).join('') || '<p style="color:var(--gray-400)">אין צוותים</p>';
-  } catch {}
+        <div class="team-members-list" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">
+          ${detail.members.map(m => `
+            <div class="team-member-chip">
+              <span>${escHtml(m.name)}</span>
+              <span style="color:var(--gray-400);font-size:11px">${getRoleLabel(m.role_type)}</span>
+              <button class="btn-remove-member" onclick="removeMember(${t.id}, ${m.id})" title="הסר">✕</button>
+            </div>
+          `).join('')}
+          ${detail.members.length === 0 ? '<span style="color:var(--gray-400);font-size:12px">אין חברים עדיין</span>' : ''}
+        </div>
+      `;
+      list.appendChild(card);
+    }
+  } catch {
+    list.innerHTML = '<p style="color:var(--gray-400)">שגיאה בטעינת צוותים</p>';
+  }
+}
+
+async function removeMember(teamId, userId) {
+  try {
+    await API.removeTeamMember(teamId, userId);
+    await loadTeamsList();
+    showToast('החבר הוסר');
+  } catch (err) {
+    showToast('שגיאה: ' + err.message, 'error');
+  }
+}
+
+let _addMemberTeamId = null;
+function openAddMemberModal(teamId, teamName) {
+  _addMemberTeamId = teamId;
+  document.getElementById('add-member-title').textContent = `הוסף חבר לצוות "${teamName}"`;
+  const sel = document.getElementById('add-member-user-select');
+  sel.innerHTML = allUsers.map(u =>
+    `<option value="${u.id}">${escHtml(u.name)} — ${getRoleLabel(u.role_type)}</option>`
+  ).join('');
+  document.getElementById('add-member-modal').classList.remove('hidden');
+}
+
+function closeAddMemberModal() {
+  document.getElementById('add-member-modal').classList.add('hidden');
+  _addMemberTeamId = null;
+}
+
+async function submitAddMember() {
+  if (!_addMemberTeamId) return;
+  const userId = parseInt(document.getElementById('add-member-user-select').value);
+  try {
+    await API.addTeamMember(_addMemberTeamId, userId);
+    closeAddMemberModal();
+    await loadTeamsList();
+    showToast('החבר נוסף', 'success');
+  } catch (err) {
+    showToast('שגיאה: ' + err.message, 'error');
+  }
 }
 
 async function loadOrgTree() {
+  const el = document.getElementById('org-tree');
+  el.innerHTML = '<p style="color:var(--gray-400)">טוען...</p>';
   try {
-    const tree = await API.orgTree();
-    const el = document.getElementById('org-tree');
-    el.innerHTML = tree.map(node => renderOrgNode(node)).join('');
-  } catch {}
+    const [tree, teams] = await Promise.all([API.orgTree(), API.teams()]);
+    el.innerHTML = '';
+
+    // ── Formal hierarchy ──
+    const formalSection = document.createElement('div');
+    formalSection.className = 'org-section';
+    formalSection.innerHTML = '<h4 class="org-section-title">מבנה היררכי רשמי</h4>';
+    const treeWrap = document.createElement('div');
+    treeWrap.className = 'org-tree-wrap';
+    treeWrap.dir = 'ltr';
+    tree.forEach(root => treeWrap.appendChild(buildOrgNode(root)));
+    formalSection.appendChild(treeWrap);
+    el.appendChild(formalSection);
+
+    // ── Teams / informal ──
+    if (teams.length > 0) {
+      const teamsSection = document.createElement('div');
+      teamsSection.className = 'org-section';
+      teamsSection.innerHTML = '<h4 class="org-section-title">צוותים אד-הוק ופרויקטים</h4>';
+      const teamsGrid = document.createElement('div');
+      teamsGrid.className = 'org-teams-grid';
+
+      for (const team of teams) {
+        try {
+          const detail = await API.teamDetail(team.id);
+          const card = document.createElement('div');
+          card.className = 'org-team-card';
+          card.innerHTML = `
+            <div class="org-team-name">${escHtml(team.name)}</div>
+            ${team.focus ? `<div class="org-team-focus">${escHtml(team.focus)}</div>` : ''}
+            <div class="org-team-members">
+              ${detail.members.map(m => `
+                <div class="org-team-member">
+                  <span class="member-avatar">${m.name[0]}</span>
+                  <span>${escHtml(m.name)}</span>
+                  <span class="org-member-role">${getRoleLabel(m.role_type)}</span>
+                </div>
+              `).join('') || '<span style="color:var(--gray-400);font-size:12px">אין חברים</span>'}
+            </div>
+          `;
+          teamsGrid.appendChild(card);
+        } catch {}
+      }
+      teamsSection.appendChild(teamsGrid);
+      el.appendChild(teamsSection);
+    }
+  } catch (err) {
+    document.getElementById('org-tree').innerHTML = '<p style="color:var(--gray-400)">שגיאה בטעינת עץ ארגוני</p>';
+  }
 }
 
-function renderOrgNode(node, isLast = true) {
-  const hasChildren = node.children?.length > 0;
-  return `
-    <div class="org-tree-node">
-      <div class="org-node-box">
-        <div class="org-node-role">${ROLE_LABELS[node.role_type] || node.role_type}</div>
-        <div class="org-node-name">${escHtml(node.name)}</div>
-        <div class="org-node-email" dir="ltr">${escHtml(node.email)}</div>
-      </div>
-      ${hasChildren ? `
-        <div class="org-children-wrap">
-          ${node.children.map((c, i) => renderOrgNode(c, i === node.children.length - 1)).join('')}
-        </div>
-      ` : ''}
+function buildOrgNode(node) {
+  const wrap = document.createElement('li');
+  wrap.className = 'org-li';
+
+  const box = document.createElement('div');
+  box.className = 'org-node-box';
+  const openBadge = node.open_tasks > 0
+    ? `<span class="org-tasks-open">${node.open_tasks} פתוחות</span>` : '';
+  const doneBadge = node.done_tasks > 0
+    ? `<span class="org-tasks-done">${node.done_tasks} הושלמו</span>` : '';
+  const teamBadges = (node.teams || []).map(t =>
+    `<span class="org-team-badge">${escHtml(t)}</span>`
+  ).join('');
+
+  box.innerHTML = `
+    <div class="org-node-role">${getRoleLabel(node.role_type)}</div>
+    <div class="org-node-name">${escHtml(node.name)}</div>
+    <div class="org-node-meta">
+      ${openBadge}${doneBadge}
+      ${teamBadges}
     </div>
   `;
+  wrap.appendChild(box);
+
+  if (node.children?.length) {
+    const ul = document.createElement('ul');
+    ul.className = 'org-ul';
+    node.children.forEach(c => ul.appendChild(buildOrgNode(c)));
+    wrap.appendChild(ul);
+  }
+  return wrap;
 }
 
 async function loadAuditLog() {
@@ -687,6 +830,35 @@ async function loadAuditLog() {
     `).join('');
   } catch {
     el.innerHTML = '<p style="color:var(--gray-400)">שגיאה בטעינת יומן</p>';
+  }
+}
+
+// ─── Org Settings ─────────────────────────────────
+function populateSettingsForm() {
+  document.getElementById('cfg-org-name').value = appConfig.org_name || '';
+  const roles = appConfig.role_labels || {};
+  Object.keys(roles).forEach(key => {
+    const el = document.getElementById(`cfg-role-${key}`);
+    if (el) el.value = roles[key] || '';
+  });
+}
+
+async function saveOrgSettings() {
+  const roleKeys = ['division_head', 'section_head', 'office_manager', 'economist', 'student', 'advisor', 'team_lead', 'external'];
+  const role_labels = {};
+  roleKeys.forEach(key => {
+    const el = document.getElementById(`cfg-role-${key}`);
+    if (el && el.value.trim()) role_labels[key] = el.value.trim();
+  });
+  const payload = {
+    org_name: document.getElementById('cfg-org-name').value.trim() || 'אגף',
+    role_labels,
+  };
+  try {
+    appConfig = await API.saveOrgConfig(payload);
+    showToast('ההגדרות נשמרו', 'success');
+  } catch (err) {
+    showToast('שגיאה בשמירה: ' + err.message, 'error');
   }
 }
 

@@ -497,74 +497,149 @@ body {
   border-radius: 20px;
   font-size: 12px;
 }
-/* Visual Org Tree */
-#org-tree { overflow-x: auto; padding: 16px 0; }
-.org-tree-node { display: flex; flex-direction: column; align-items: center; }
+/* ─── Org Tree ──────────────────────────────────── */
+.org-section { margin-bottom: 40px; }
+.org-section-title {
+  font-size: 14px; font-weight: 700; color: var(--gray-600);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 24px; padding-bottom: 8px;
+  border-bottom: 2px solid var(--gray-200);
+}
+.org-tree-wrap { overflow-x: auto; padding-bottom: 16px; }
+
+/* Classic CSS tree using ul/li */
+.org-tree-wrap ul.org-ul,
+.org-tree-wrap li.org-li { list-style: none; margin: 0; padding: 0; }
+
+.org-tree-wrap > ul.org-ul { display: flex; justify-content: center; }
+
+.org-tree-wrap ul.org-ul {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  padding-top: 20px;
+  position: relative;
+}
+/* Horizontal bar connecting siblings */
+.org-tree-wrap ul.org-ul::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: calc(50% / var(--child-count, 1));
+  right: calc(50% / var(--child-count, 1));
+  height: 2px;
+  background: var(--gray-300);
+}
+
+.org-tree-wrap li.org-li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 12px;
+  position: relative;
+}
+/* Vertical line above each child */
+.org-tree-wrap li.org-li::before {
+  content: '';
+  display: block;
+  width: 2px;
+  height: 20px;
+  background: var(--gray-300);
+  flex-shrink: 0;
+}
+/* Horizontal connector from parent line to node */
+.org-tree-wrap li.org-li::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gray-300);
+}
+.org-tree-wrap li.org-li:first-child::after { left: 50%; }
+.org-tree-wrap li.org-li:last-child::after  { right: 50%; }
+.org-tree-wrap li.org-li:only-child::after  { display: none; }
+
+/* The node card */
 .org-node-box {
   background: white;
   border: 1.5px solid var(--primary);
   border-radius: 10px;
-  padding: 10px 18px;
+  padding: 10px 16px;
   text-align: center;
-  min-width: 140px;
-  max-width: 200px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  min-width: 130px;
+  max-width: 190px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  cursor: default;
 }
 .org-node-role {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--primary);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  margin-bottom: 4px;
+  font-size: 10px; font-weight: 700; color: var(--primary);
+  letter-spacing: .5px; margin-bottom: 5px;
 }
 .org-node-name { font-size: 13px; font-weight: 700; color: var(--gray-900); }
-.org-node-email { font-size: 11px; color: var(--gray-400); margin-top: 3px; direction: ltr; }
-.org-children-wrap {
-  display: flex;
-  gap: 24px;
-  margin-top: 0;
+.org-node-meta { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 6px; }
+.org-tasks-open {
+  font-size: 10px; background: #fff3cd; color: #856404;
+  border-radius: 10px; padding: 1px 7px; font-weight: 600;
+}
+.org-tasks-done {
+  font-size: 10px; background: #d1fae5; color: #065f46;
+  border-radius: 10px; padding: 1px 7px; font-weight: 600;
+}
+.org-team-badge {
+  font-size: 10px; background: #ede9fe; color: #5b21b6;
+  border-radius: 10px; padding: 1px 7px;
+}
+
+/* Vertical line from this node DOWN to children ul */
+.org-li > .org-node-box {
   position: relative;
-  padding-top: 32px;
 }
-.org-children-wrap::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 50%;
-  width: 2px;
-  height: 32px;
-  background: var(--gray-300);
-}
-.org-tree-node::before {
+.org-li:has(> ul.org-ul) > .org-node-box::after {
   content: '';
   display: block;
   width: 2px;
-  height: 32px;
+  height: 20px;
   background: var(--gray-300);
-  margin-bottom: 0;
+  margin: 0 auto;
 }
-.org-tree-node:first-child::before { display: none; }
-.org-children-wrap > .org-tree-node { position: relative; }
-.org-children-wrap > .org-tree-node::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 50%;
-  width: 2px;
-  height: 32px;
-  background: var(--gray-300);
-  display: block;
+
+/* Teams grid (informal) */
+.org-teams-grid { display: flex; flex-wrap: wrap; gap: 16px; }
+.org-team-card {
+  background: white; border: 1.5px solid var(--gray-200);
+  border-radius: 10px; padding: 16px; min-width: 220px; flex: 1;
 }
-.org-children-wrap > .org-tree-node::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 50%;
-  height: 1px;
-  background: var(--gray-300);
-  width: 50%;
+.org-team-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; color: var(--gray-900); }
+.org-team-focus { font-size: 12px; color: var(--gray-500); margin-bottom: 10px; }
+.org-team-members { display: flex; flex-direction: column; gap: 6px; }
+.org-team-member {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
 }
+.member-avatar {
+  width: 26px; height: 26px; background: var(--primary);
+  color: white; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+  flex-shrink: 0;
+}
+.org-member-role { font-size: 11px; color: var(--gray-400); margin-right: auto; }
+
+/* Team member chips in teams tab */
+.team-member-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #f0f4ff; border-radius: 20px; padding: 4px 10px; font-size: 12px;
+}
+.btn-remove-member {
+  background: none; border: none; cursor: pointer;
+  color: var(--gray-400); font-size: 12px; padding: 0 2px;
+}
+.btn-remove-member:hover { color: var(--danger); }
+
+/* Settings tab */
+.settings-section { margin-bottom: 28px; }
+.settings-section h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--gray-700); }
+.settings-roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 
 /* ─── Toast ──────────────────────────────────────── */
 .toast {

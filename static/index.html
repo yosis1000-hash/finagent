@@ -391,6 +391,7 @@
         <button class="tab-btn" onclick="showAdminTab('teams')">צוותים</button>
         <button class="tab-btn" onclick="showAdminTab('org')">עץ ארגוני</button>
         <button class="tab-btn" onclick="showAdminTab('audit')">יומן ביקורת</button>
+        <button class="tab-btn" onclick="showAdminTab('settings')">הגדרות</button>
       </div>
 
       <!-- Users Tab -->
@@ -434,6 +435,35 @@
       <div id="admin-tab-audit" class="admin-tab-content hidden">
         <h3>יומן ביקורת</h3>
         <div id="audit-log-list"></div>
+      </div>
+
+      <!-- Settings Tab -->
+      <div id="admin-tab-settings" class="admin-tab-content hidden">
+        <div class="tab-header">
+          <h3>הגדרות ארגוניות</h3>
+          <button class="btn-primary" onclick="saveOrgSettings()">שמור הגדרות</button>
+        </div>
+        <div class="settings-section">
+          <h4>כללי</h4>
+          <div class="form-group" style="max-width:320px">
+            <label>שם יחידה ארגונית</label>
+            <input type="text" id="cfg-org-name" placeholder="למשל: אגף, מחלקה, יחידה">
+          </div>
+        </div>
+        <div class="settings-section">
+          <h4>תוויות תפקידים</h4>
+          <p style="font-size:13px;color:var(--gray-500);margin-bottom:12px">שנה את שמות התפקידים כפי שהם מופיעים בממשק</p>
+          <div class="settings-roles-grid">
+            <div class="form-group"><label>ראש האגף/מחלקה</label><input type="text" id="cfg-role-division_head"></div>
+            <div class="form-group"><label>ראש תחום/מדור</label><input type="text" id="cfg-role-section_head"></div>
+            <div class="form-group"><label>מנהלת משרד</label><input type="text" id="cfg-role-office_manager"></div>
+            <div class="form-group"><label>כלכלן/עובד</label><input type="text" id="cfg-role-economist"></div>
+            <div class="form-group"><label>סטודנט</label><input type="text" id="cfg-role-student"></div>
+            <div class="form-group"><label>יועץ</label><input type="text" id="cfg-role-advisor"></div>
+            <div class="form-group"><label>ראש צוות</label><input type="text" id="cfg-role-team_lead"></div>
+            <div class="form-group"><label>חיצוני</label><input type="text" id="cfg-role-external"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -520,6 +550,25 @@
         <button type="submit" class="btn-primary">צור צוות</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Add Team Member Modal -->
+<div id="add-member-modal" class="modal hidden">
+  <div class="modal-overlay" onclick="closeAddMemberModal()"></div>
+  <div class="modal-content" style="max-width:400px">
+    <div class="modal-header">
+      <h3 id="add-member-title">הוסף חבר לצוות</h3>
+      <button class="btn-ghost" onclick="closeAddMemberModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>בחר עובד</label>
+      <select id="add-member-user-select"></select>
+    </div>
+    <div class="form-actions">
+      <button class="btn-ghost" onclick="closeAddMemberModal()">ביטול</button>
+      <button class="btn-primary" onclick="submitAddMember()">הוסף</button>
+    </div>
   </div>
 </div>
 
