@@ -523,6 +523,58 @@
   </div>
 </div>
 
+<!-- Edit User Modal -->
+<div id="edit-user-modal" class="modal hidden">
+  <div class="modal-overlay" onclick="closeEditUserModal()"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>עריכת משתמש</h3>
+      <button class="btn-ghost" onclick="closeEditUserModal()">✕</button>
+    </div>
+    <form id="edit-user-form" onsubmit="submitEditUser(event)">
+      <input type="hidden" id="eu-id">
+      <div class="form-group">
+        <label>שם מלא *</label>
+        <input type="text" id="eu-name" required>
+      </div>
+      <div class="form-group">
+        <label>אימייל *</label>
+        <input type="email" id="eu-email" required dir="ltr">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>תפקיד *</label>
+          <select id="eu-role">
+            <option value="economist">כלכלן</option>
+            <option value="student">סטודנט</option>
+            <option value="section_head">ראש מדור</option>
+            <option value="office_manager">מנהלת משרד</option>
+            <option value="advisor">יועץ</option>
+            <option value="external">חיצוני</option>
+            <option value="division_head">ראש מחלקה</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>מנהל ישיר</label>
+          <select id="eu-parent"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>תדירות דיווח</label>
+        <select id="eu-report-freq">
+          <option value="weekly">שבועי</option>
+          <option value="daily">יומי</option>
+          <option value="none">ללא</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-ghost" onclick="closeEditUserModal()">ביטול</button>
+        <button type="submit" class="btn-primary">שמור שינויים</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Toast Notification -->
 <div id="toast" class="toast hidden"></div>
 

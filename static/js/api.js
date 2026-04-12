@@ -87,4 +87,7 @@ const API = {
   submitReport: (data) => API.post('/api/reports/submit', data),
   myReports: () => API.get('/api/reports/my'),
   allReports: () => API.get('/api/reports/'),
+
+  // Audit
+  auditLogs: () => API.get('/api/users/audit-logs'),
 };

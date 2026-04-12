@@ -497,18 +497,74 @@ body {
   border-radius: 20px;
   font-size: 12px;
 }
-.org-tree-node { margin-bottom: 4px; }
-.org-node {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+/* Visual Org Tree */
+#org-tree { overflow-x: auto; padding: 16px 0; }
+.org-tree-node { display: flex; flex-direction: column; align-items: center; }
+.org-node-box {
   background: white;
-  border: 1px solid var(--gray-200);
-  border-radius: 6px;
-  padding: 5px 12px;
-  font-size: 13px;
+  border: 1.5px solid var(--primary);
+  border-radius: 10px;
+  padding: 10px 18px;
+  text-align: center;
+  min-width: 140px;
+  max-width: 200px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
-.org-children { padding-right: 28px; margin-top: 4px; border-right: 2px solid var(--gray-200); }
+.org-node-role {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+.org-node-name { font-size: 13px; font-weight: 700; color: var(--gray-900); }
+.org-node-email { font-size: 11px; color: var(--gray-400); margin-top: 3px; direction: ltr; }
+.org-children-wrap {
+  display: flex;
+  gap: 24px;
+  margin-top: 0;
+  position: relative;
+  padding-top: 32px;
+}
+.org-children-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 2px;
+  height: 32px;
+  background: var(--gray-300);
+}
+.org-tree-node::before {
+  content: '';
+  display: block;
+  width: 2px;
+  height: 32px;
+  background: var(--gray-300);
+  margin-bottom: 0;
+}
+.org-tree-node:first-child::before { display: none; }
+.org-children-wrap > .org-tree-node { position: relative; }
+.org-children-wrap > .org-tree-node::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 2px;
+  height: 32px;
+  background: var(--gray-300);
+  display: block;
+}
+.org-children-wrap > .org-tree-node::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  height: 1px;
+  background: var(--gray-300);
+  width: 50%;
+}
 
 /* ─── Toast ──────────────────────────────────────── */
 .toast {

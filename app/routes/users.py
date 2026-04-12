@@ -119,6 +119,31 @@ def deactivate_user(
     _log(db, current_user.id, "deactivate", "user", user.id, f"Deactivated user {user.email}")
 
 
+@router.get("/audit-logs")
+def list_audit_logs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleType.division_head, RoleType.office_manager)),
+):
+    logs = (
+        db.query(AuditLog)
+        .order_by(AuditLog.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return [
+        {
+            "id": l.id,
+            "actor_name": l.actor.name if l.actor else "מערכת",
+            "action": l.action,
+            "entity_type": l.entity_type,
+            "entity_id": l.entity_id,
+            "details": l.details,
+            "created_at": l.created_at,
+        }
+        for l in logs
+    ]
+
+
 def _log(db: Session, actor_id: int, action: str, entity: str, entity_id: int, details: str):
     db.add(AuditLog(
         actor_user_id=actor_id,

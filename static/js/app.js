@@ -604,7 +604,8 @@ async function loadUsersTable() {
         <td>${u.parent_id ? (users.find(p => p.id === u.parent_id)?.name || u.parent_id) : '-'}</td>
         <td>${u.report_frequency === 'daily' ? 'יומי' : u.report_frequency === 'weekly' ? 'שבועי' : 'ללא'}</td>
         <td><span class="status-badge ${u.is_active ? 'active' : 'archived'}">${u.is_active ? 'פעיל' : 'לא פעיל'}</span></td>
-        <td>
+        <td style="display:flex;gap:6px">
+          <button class="btn-ghost btn-sm" onclick="openEditUserModal(${u.id})">ערוך</button>
           ${currentUser?.role_type === 'division_head' ? `
             <button class="btn-ghost btn-sm" onclick="deactivateUser(${u.id}, '${escHtml(u.name)}')">
               ${u.is_active ? 'השבת' : 'השבתה'}
@@ -641,25 +642,52 @@ async function loadOrgTree() {
   } catch {}
 }
 
-function renderOrgNode(node) {
+function renderOrgNode(node, isLast = true) {
+  const hasChildren = node.children?.length > 0;
   return `
     <div class="org-tree-node">
-      <div class="org-node">
-        <span class="type-badge ${node.role_type}">${ROLE_LABELS[node.role_type] || node.role_type}</span>
-        <strong>${escHtml(node.name)}</strong>
-        <span style="color:var(--gray-400);font-size:11px" dir="ltr">${escHtml(node.email)}</span>
+      <div class="org-node-box">
+        <div class="org-node-role">${ROLE_LABELS[node.role_type] || node.role_type}</div>
+        <div class="org-node-name">${escHtml(node.name)}</div>
+        <div class="org-node-email" dir="ltr">${escHtml(node.email)}</div>
       </div>
-      ${node.children?.length ? `<div class="org-children">${node.children.map(renderOrgNode).join('')}</div>` : ''}
+      ${hasChildren ? `
+        <div class="org-children-wrap">
+          ${node.children.map((c, i) => renderOrgNode(c, i === node.children.length - 1)).join('')}
+        </div>
+      ` : ''}
     </div>
   `;
 }
 
 async function loadAuditLog() {
-  // Uses the dashboard reports endpoint as a proxy - in a real app we'd have a dedicated endpoint
   const el = document.getElementById('audit-log-list');
   el.innerHTML = '<p style="color:var(--gray-400)">טוען...</p>';
-  // Placeholder - audit log endpoint to be wired up
-  el.innerHTML = '<p style="color:var(--gray-400)">יומן ביקורת זמין עבור אדמין ראשי</p>';
+  try {
+    const logs = await API.auditLogs();
+    if (logs.length === 0) {
+      el.innerHTML = '<p style="color:var(--gray-400)">אין רשומות ביקורת</p>';
+      return;
+    }
+    const ACTION_LABELS = {
+      create: 'יצר', update: 'עדכן', deactivate: 'השבית',
+      submit_report: 'הגיש דיווח', archive: 'העביר לארכיב',
+    };
+    const ENTITY_LABELS = { user: 'משתמש', work_item: 'פריט', team: 'צוות', report: 'דיווח' };
+    el.innerHTML = logs.map(l => `
+      <div class="report-card" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px">
+        <div>
+          <strong>${escHtml(l.actor_name)}</strong>
+          <span style="color:var(--gray-600);margin:0 6px">${ACTION_LABELS[l.action] || l.action}</span>
+          <span>${ENTITY_LABELS[l.entity_type] || l.entity_type}${l.entity_id ? ` #${l.entity_id}` : ''}</span>
+          ${l.details ? `<div style="font-size:12px;color:var(--gray-500);margin-top:2px">${escHtml(l.details)}</div>` : ''}
+        </div>
+        <span style="font-size:12px;color:var(--gray-400);white-space:nowrap">${formatDate(l.created_at)}</span>
+      </div>
+    `).join('');
+  } catch {
+    el.innerHTML = '<p style="color:var(--gray-400)">שגיאה בטעינת יומן</p>';
+  }
 }
 
 // Create User
@@ -701,6 +729,51 @@ async function deactivateUser(id, name) {
     await API.deactivateUser(id);
     await loadUsersTable();
     showToast(`${name} הושבת`);
+  } catch (err) {
+    showToast('שגיאה: ' + err.message, 'error');
+  }
+}
+
+// Edit User
+function openEditUserModal(userId) {
+  const user = allUsers.find(u => u.id === userId);
+  if (!user) return;
+
+  document.getElementById('eu-id').value = user.id;
+  document.getElementById('eu-name').value = user.name;
+  document.getElementById('eu-email').value = user.email;
+  document.getElementById('eu-role').value = user.role_type;
+  document.getElementById('eu-report-freq').value = user.report_frequency;
+
+  const sel = document.getElementById('eu-parent');
+  sel.innerHTML = '<option value="">- ללא -</option>' +
+    allUsers.filter(u => u.id !== userId).map(u =>
+      `<option value="${u.id}" ${u.id === user.parent_id ? 'selected' : ''}>${escHtml(u.name)}</option>`
+    ).join('');
+
+  document.getElementById('edit-user-modal').classList.remove('hidden');
+}
+
+function closeEditUserModal() {
+  document.getElementById('edit-user-modal').classList.add('hidden');
+  document.getElementById('edit-user-form').reset();
+}
+
+async function submitEditUser(e) {
+  e.preventDefault();
+  const id = parseInt(document.getElementById('eu-id').value);
+  const payload = {
+    name: document.getElementById('eu-name').value,
+    email: document.getElementById('eu-email').value,
+    role_type: document.getElementById('eu-role').value,
+    parent_id: document.getElementById('eu-parent').value ? parseInt(document.getElementById('eu-parent').value) : null,
+    report_frequency: document.getElementById('eu-report-freq').value,
+  };
+  try {
+    await API.updateUser(id, payload);
+    await loadUsersTable();
+    closeEditUserModal();
+    showToast('המשתמש עודכן בהצלחה', 'success');
   } catch (err) {
     showToast('שגיאה: ' + err.message, 'error');
   }
