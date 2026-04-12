@@ -715,92 +715,201 @@ async function submitAddMember() {
   }
 }
 
+// Org tree node data cache (for drawer)
+let _orgNodeCache = {};
+
 async function loadOrgTree() {
   const el = document.getElementById('org-tree');
   el.innerHTML = '<p style="color:var(--gray-400)">טוען...</p>';
   try {
     const [tree, teams] = await Promise.all([API.orgTree(), API.teams()]);
+    _orgNodeCache = {};
     el.innerHTML = '';
 
     // ── Formal hierarchy ──
     const formalSection = document.createElement('div');
     formalSection.className = 'org-section';
     formalSection.innerHTML = '<h4 class="org-section-title">מבנה היררכי רשמי</h4>';
-    const treeWrap = document.createElement('div');
-    treeWrap.className = 'org-tree-wrap';
-    treeWrap.dir = 'ltr';
-    tree.forEach(root => treeWrap.appendChild(buildOrgNode(root)));
-    formalSection.appendChild(treeWrap);
+
+    // Build a proper ul.org-chart > li structure
+    const rootUl = document.createElement('ul');
+    rootUl.className = 'org-chart';
+    tree.forEach(root => rootUl.appendChild(buildOrgNode(root)));
+
+    const scrollWrap = document.createElement('div');
+    scrollWrap.className = 'org-scroll-wrap';
+    scrollWrap.appendChild(rootUl);
+    formalSection.appendChild(scrollWrap);
     el.appendChild(formalSection);
 
     // ── Teams / informal ──
-    if (teams.length > 0) {
-      const teamsSection = document.createElement('div');
-      teamsSection.className = 'org-section';
-      teamsSection.innerHTML = '<h4 class="org-section-title">צוותים אד-הוק ופרויקטים</h4>';
+    const teamsSection = document.createElement('div');
+    teamsSection.className = 'org-section';
+    teamsSection.innerHTML = '<h4 class="org-section-title">צוותים אד-הוק</h4>';
+
+    if (teams.length === 0) {
+      teamsSection.innerHTML += '<p style="color:var(--gray-400);font-size:13px">אין צוותים מוגדרים עדיין</p>';
+    } else {
       const teamsGrid = document.createElement('div');
       teamsGrid.className = 'org-teams-grid';
-
       for (const team of teams) {
-        try {
-          const detail = await API.teamDetail(team.id);
-          const card = document.createElement('div');
-          card.className = 'org-team-card';
-          card.innerHTML = `
+        let detail = { members: [] };
+        try { detail = await API.teamDetail(team.id); } catch {}
+        const card = document.createElement('div');
+        card.className = 'org-team-card';
+        card.innerHTML = `
+          <div class="org-team-header">
             <div class="org-team-name">${escHtml(team.name)}</div>
             ${team.focus ? `<div class="org-team-focus">${escHtml(team.focus)}</div>` : ''}
-            <div class="org-team-members">
-              ${detail.members.map(m => `
-                <div class="org-team-member">
-                  <span class="member-avatar">${m.name[0]}</span>
-                  <span>${escHtml(m.name)}</span>
-                  <span class="org-member-role">${getRoleLabel(m.role_type)}</span>
+          </div>
+          <div class="org-team-members">
+            ${detail.members.map(m => `
+              <div class="org-team-member" onclick="openPersonDrawer(${m.id})" style="cursor:pointer">
+                <span class="member-avatar">${m.name[0]}</span>
+                <div>
+                  <div style="font-size:13px;font-weight:600">${escHtml(m.name)}</div>
+                  <div style="font-size:11px;color:var(--gray-400)">${getRoleLabel(m.role_type)}</div>
                 </div>
-              `).join('') || '<span style="color:var(--gray-400);font-size:12px">אין חברים</span>'}
-            </div>
-          `;
-          teamsGrid.appendChild(card);
-        } catch {}
+              </div>
+            `).join('') || '<span style="color:var(--gray-400);font-size:12px">אין חברים</span>'}
+          </div>
+        `;
+        teamsGrid.appendChild(card);
       }
       teamsSection.appendChild(teamsGrid);
-      el.appendChild(teamsSection);
     }
+    el.appendChild(teamsSection);
+
   } catch (err) {
-    document.getElementById('org-tree').innerHTML = '<p style="color:var(--gray-400)">שגיאה בטעינת עץ ארגוני</p>';
+    document.getElementById('org-tree').innerHTML =
+      `<p style="color:var(--danger)">שגיאה בטעינת עץ ארגוני: ${escHtml(err.message)}</p>`;
   }
 }
 
 function buildOrgNode(node) {
-  const wrap = document.createElement('li');
-  wrap.className = 'org-li';
+  // Cache node data for drawer
+  _orgNodeCache[node.id] = node;
 
-  const box = document.createElement('div');
-  box.className = 'org-node-box';
+  const li = document.createElement('li');
+
+  // The clickable card
+  const card = document.createElement('div');
+  card.className = 'org-card';
+  card.onclick = () => openPersonDrawer(node.id);
+
   const openBadge = node.open_tasks > 0
-    ? `<span class="org-tasks-open">${node.open_tasks} פתוחות</span>` : '';
+    ? `<span class="org-badge-open">${node.open_tasks} פתוחות</span>` : '';
   const doneBadge = node.done_tasks > 0
-    ? `<span class="org-tasks-done">${node.done_tasks} הושלמו</span>` : '';
+    ? `<span class="org-badge-done">${node.done_tasks} הושלמו</span>` : '';
   const teamBadges = (node.teams || []).map(t =>
-    `<span class="org-team-badge">${escHtml(t)}</span>`
+    `<span class="org-badge-team">${escHtml(t)}</span>`
   ).join('');
 
-  box.innerHTML = `
-    <div class="org-node-role">${getRoleLabel(node.role_type)}</div>
-    <div class="org-node-name">${escHtml(node.name)}</div>
-    <div class="org-node-meta">
-      ${openBadge}${doneBadge}
-      ${teamBadges}
-    </div>
+  card.innerHTML = `
+    <div class="org-card-role">${getRoleLabel(node.role_type)}</div>
+    <div class="org-card-avatar">${node.name[0]}</div>
+    <div class="org-card-name">${escHtml(node.name)}</div>
+    ${(openBadge || doneBadge || teamBadges) ? `
+      <div class="org-card-badges">${openBadge}${doneBadge}${teamBadges}</div>
+    ` : ''}
+    <div class="org-card-hint">לחץ לפרטים</div>
   `;
-  wrap.appendChild(box);
+  li.appendChild(card);
 
   if (node.children?.length) {
     const ul = document.createElement('ul');
-    ul.className = 'org-ul';
     node.children.forEach(c => ul.appendChild(buildOrgNode(c)));
-    wrap.appendChild(ul);
+    li.appendChild(ul);
   }
-  return wrap;
+  return li;
+}
+
+// ─── Person Drawer ────────────────────────────────
+async function openPersonDrawer(userId) {
+  const node = _orgNodeCache[userId];
+  const drawer = document.getElementById('person-drawer');
+  drawer.classList.remove('hidden');
+
+  if (node) {
+    document.getElementById('drawer-role').textContent = getRoleLabel(node.role_type);
+    document.getElementById('drawer-name').textContent = node.name;
+    document.getElementById('drawer-email').textContent = node.email || '';
+    document.getElementById('drawer-stats').innerHTML = `
+      <span class="org-badge-open" style="font-size:13px;padding:4px 12px">${node.open_tasks || 0} משימות פתוחות</span>
+      <span class="org-badge-done" style="font-size:13px;padding:4px 12px">${node.done_tasks || 0} הושלמו</span>
+    `;
+  }
+
+  const body = document.getElementById('drawer-body');
+  body.innerHTML = '<p style="color:var(--gray-400)">טוען משימות...</p>';
+
+  try {
+    // Load all items and filter by this user
+    const items = await API.items({ assignee_id: userId });
+    const userItems = items.filter ? items : (items || []);
+
+    if (userItems.length === 0) {
+      body.innerHTML = '<p style="color:var(--gray-400)">אין פריטים משויכים</p>';
+      return;
+    }
+
+    const open = userItems.filter(i => !['completed','cancelled','archived','closed'].includes(i.status));
+    const done = userItems.filter(i => i.status === 'completed');
+
+    body.innerHTML = '';
+
+    if (open.length > 0) {
+      const openSection = document.createElement('div');
+      openSection.className = 'drawer-section';
+      openSection.innerHTML = `
+        <div class="drawer-section-title">פתוחות (${open.length})</div>
+        ${open.map(i => drawerItemRow(i)).join('')}
+      `;
+      body.appendChild(openSection);
+    }
+
+    if (done.length > 0) {
+      const doneWrap = document.createElement('div');
+      doneWrap.className = 'drawer-section';
+      const doneToggle = document.createElement('div');
+      doneToggle.className = 'drawer-section-title drawer-toggle';
+      doneToggle.innerHTML = `<span>הושלמו (${done.length})</span> <span class="toggle-icon">▶</span>`;
+      const doneList = document.createElement('div');
+      doneList.className = 'drawer-done-list hidden';
+      doneList.innerHTML = done.slice(0, 30).map(i => drawerItemRow(i)).join('');
+      doneToggle.onclick = () => {
+        const collapsed = doneList.classList.toggle('hidden');
+        doneToggle.querySelector('.toggle-icon').textContent = collapsed ? '▶' : '▼';
+      };
+      doneWrap.appendChild(doneToggle);
+      doneWrap.appendChild(doneList);
+      body.appendChild(doneWrap);
+    }
+  } catch (err) {
+    body.innerHTML = `<p style="color:var(--danger)">שגיאה: ${escHtml(err.message)}</p>`;
+  }
+}
+
+function drawerItemRow(item) {
+  const priority = item.priority
+    ? `<span class="priority-badge ${item.priority}">${PRIORITY_LABELS[item.priority]}</span>` : '';
+  const deadline = item.deadline ? `<span style="font-size:11px;color:var(--gray-400)">⏰ ${formatDate(item.deadline)}</span>` : '';
+  return `
+    <div class="drawer-item" onclick="closePersonDrawer(); openItemModal(${item.id})">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span class="type-badge ${item.type}">${TYPE_LABELS[item.type]}</span>
+        <span class="drawer-item-title">${escHtml(item.title)}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <span class="status-badge ${item.status}">${STATUS_LABELS[item.status]}</span>
+        ${priority}${deadline}
+      </div>
+    </div>
+  `;
+}
+
+function closePersonDrawer() {
+  document.getElementById('person-drawer').classList.add('hidden');
 }
 
 async function loadAuditLog() {

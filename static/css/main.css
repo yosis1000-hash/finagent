@@ -498,132 +498,186 @@ body {
   font-size: 12px;
 }
 /* ─── Org Tree ──────────────────────────────────── */
-.org-section { margin-bottom: 40px; }
+.org-section { margin-bottom: 48px; }
 .org-section-title {
-  font-size: 14px; font-weight: 700; color: var(--gray-600);
-  text-transform: uppercase; letter-spacing: .5px;
-  margin-bottom: 24px; padding-bottom: 8px;
+  font-size: 12px; font-weight: 700; color: var(--gray-500);
+  text-transform: uppercase; letter-spacing: 1px;
+  margin-bottom: 28px; padding-bottom: 8px;
   border-bottom: 2px solid var(--gray-200);
 }
-.org-tree-wrap { overflow-x: auto; padding-bottom: 16px; }
+.org-scroll-wrap { overflow-x: auto; padding: 8px 0 24px; }
 
-/* Classic CSS tree using ul/li */
-.org-tree-wrap ul.org-ul,
-.org-tree-wrap li.org-li { list-style: none; margin: 0; padding: 0; }
-
-.org-tree-wrap > ul.org-ul { display: flex; justify-content: center; }
-
-.org-tree-wrap ul.org-ul {
-  display: flex;
-  flex-direction: row;
-  gap: 0;
-  padding-top: 20px;
-  position: relative;
+/* ── Proven float-based org chart tree ── */
+.org-chart, .org-chart ul {
+  margin: 0; padding: 0; list-style: none; text-align: center;
 }
-/* Horizontal bar connecting siblings */
-.org-tree-wrap ul.org-ul::before {
+.org-chart { display: inline-block; min-width: 100%; }
+.org-chart ul { display: flex; justify-content: center; padding-top: 28px; position: relative; }
+
+/* Vertical line down from parent to horizontal bar */
+.org-chart ul::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: calc(50% / var(--child-count, 1));
-  right: calc(50% / var(--child-count, 1));
-  height: 2px;
-  background: var(--gray-300);
+  top: 0; left: 50%;
+  border-left: 2px solid var(--gray-300);
+  height: 28px;
 }
-
-.org-tree-wrap li.org-li {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0 12px;
+.org-chart li {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 28px 10px 0;
   position: relative;
 }
-/* Vertical line above each child */
-.org-tree-wrap li.org-li::before {
-  content: '';
-  display: block;
-  width: 2px;
-  height: 20px;
-  background: var(--gray-300);
-  flex-shrink: 0;
-}
-/* Horizontal connector from parent line to node */
-.org-tree-wrap li.org-li::after {
+/* Horizontal connectors between siblings */
+.org-chart li::before, .org-chart li::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--gray-300);
+  top: 0; right: 50%;
+  border-top: 2px solid var(--gray-300);
+  width: 50%; height: 28px;
 }
-.org-tree-wrap li.org-li:first-child::after { left: 50%; }
-.org-tree-wrap li.org-li:last-child::after  { right: 50%; }
-.org-tree-wrap li.org-li:only-child::after  { display: none; }
+.org-chart li::after {
+  right: auto; left: 50%;
+  border-left: 2px solid var(--gray-300);
+}
+.org-chart li:only-child::after,
+.org-chart li:only-child::before { display: none; }
+.org-chart li:first-child::before,
+.org-chart li:last-child::after  { border: 0; }
+.org-chart li:last-child::before {
+  border-right: 2px solid var(--gray-300);
+  border-radius: 0 5px 0 0;
+}
+.org-chart li:first-child::after { border-radius: 5px 0 0 0; }
 
-/* The node card */
-.org-node-box {
+/* The card */
+.org-card {
   background: white;
-  border: 1.5px solid var(--primary);
-  border-radius: 10px;
-  padding: 10px 16px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 12px;
+  padding: 14px 16px 10px;
+  min-width: 148px;
+  max-width: 180px;
   text-align: center;
-  min-width: 130px;
-  max-width: 190px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  cursor: default;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  transition: border-color .15s, box-shadow .15s, transform .1s;
+  position: relative;
 }
-.org-node-role {
-  font-size: 10px; font-weight: 700; color: var(--primary);
-  letter-spacing: .5px; margin-bottom: 5px;
+.org-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 16px rgba(99,102,241,0.15);
+  transform: translateY(-2px);
 }
-.org-node-name { font-size: 13px; font-weight: 700; color: var(--gray-900); }
-.org-node-meta { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 6px; }
-.org-tasks-open {
-  font-size: 10px; background: #fff3cd; color: #856404;
-  border-radius: 10px; padding: 1px 7px; font-weight: 600;
+.org-card-role {
+  font-size: 9px; font-weight: 800; color: var(--primary);
+  letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;
 }
-.org-tasks-done {
+.org-card-avatar {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--primary), #818cf8);
+  color: white; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700;
+  margin: 0 auto 8px;
+}
+.org-card-name { font-size: 13px; font-weight: 700; color: var(--gray-900); line-height: 1.3; }
+.org-card-badges {
+  display: flex; flex-wrap: wrap; gap: 3px;
+  justify-content: center; margin-top: 8px;
+}
+.org-badge-open {
+  font-size: 10px; background: #fef3c7; color: #92400e;
+  border-radius: 10px; padding: 1px 7px; font-weight: 700;
+}
+.org-badge-done {
   font-size: 10px; background: #d1fae5; color: #065f46;
   border-radius: 10px; padding: 1px 7px; font-weight: 600;
 }
-.org-team-badge {
+.org-badge-team {
   font-size: 10px; background: #ede9fe; color: #5b21b6;
-  border-radius: 10px; padding: 1px 7px;
+  border-radius: 10px; padding: 1px 6px;
+}
+.org-card-hint {
+  font-size: 10px; color: var(--gray-400); margin-top: 8px;
+  border-top: 1px solid var(--gray-100); padding-top: 6px;
 }
 
-/* Vertical line from this node DOWN to children ul */
-.org-li > .org-node-box {
-  position: relative;
-}
-.org-li:has(> ul.org-ul) > .org-node-box::after {
-  content: '';
-  display: block;
-  width: 2px;
-  height: 20px;
-  background: var(--gray-300);
-  margin: 0 auto;
-}
-
-/* Teams grid (informal) */
+/* Teams grid */
 .org-teams-grid { display: flex; flex-wrap: wrap; gap: 16px; }
 .org-team-card {
   background: white; border: 1.5px solid var(--gray-200);
-  border-radius: 10px; padding: 16px; min-width: 220px; flex: 1;
+  border-radius: 12px; padding: 18px; min-width: 220px; flex: 1; max-width: 320px;
 }
-.org-team-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; color: var(--gray-900); }
-.org-team-focus { font-size: 12px; color: var(--gray-500); margin-bottom: 10px; }
-.org-team-members { display: flex; flex-direction: column; gap: 6px; }
+.org-team-header { margin-bottom: 12px; }
+.org-team-name { font-size: 15px; font-weight: 700; color: var(--gray-900); }
+.org-team-focus { font-size: 12px; color: var(--gray-500); margin-top: 3px; }
+.org-team-members { display: flex; flex-direction: column; gap: 8px; }
 .org-team-member {
-  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 8px; transition: background .1s;
 }
+.org-team-member:hover { background: var(--gray-50); }
 .member-avatar {
-  width: 26px; height: 26px; background: var(--primary);
-  color: white; border-radius: 50%; display: flex;
-  align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
-  flex-shrink: 0;
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, var(--primary), #818cf8);
+  color: white; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
 }
-.org-member-role { font-size: 11px; color: var(--gray-400); margin-right: auto; }
+
+/* Person Drawer */
+.person-drawer {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; justify-content: flex-end;
+}
+.person-drawer.hidden { display: none; }
+.person-drawer-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.3);
+}
+.person-drawer-panel {
+  position: relative; width: 420px; max-width: 90vw;
+  background: white; height: 100%;
+  display: flex; flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+  overflow: hidden;
+}
+.person-drawer-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid var(--gray-200);
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  color: white;
+}
+.person-drawer-role { font-size: 11px; font-weight: 700; letter-spacing: 1px; opacity: .8; margin-bottom: 6px; }
+.person-drawer-name { font-size: 20px; font-weight: 800; }
+.person-drawer-email { font-size: 12px; opacity: .7; margin-top: 4px; direction: ltr; }
+.person-drawer-header .btn-ghost { color: white; opacity: .8; }
+.person-drawer-header .btn-ghost:hover { opacity: 1; background: rgba(255,255,255,.15); }
+.person-drawer-stats {
+  display: flex; gap: 10px; padding: 14px 20px;
+  border-bottom: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+.person-drawer-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.drawer-section { margin-bottom: 20px; }
+.drawer-section-title {
+  font-size: 12px; font-weight: 700; color: var(--gray-500);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 10px;
+}
+.drawer-toggle {
+  display: flex; justify-content: space-between; align-items: center;
+  cursor: pointer; padding: 6px 8px; border-radius: 6px;
+}
+.drawer-toggle:hover { background: var(--gray-100); }
+.drawer-item {
+  border: 1px solid var(--gray-200); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 8px;
+  cursor: pointer; transition: border-color .1s, background .1s;
+}
+.drawer-item:hover { border-color: var(--primary); background: #fafafa; }
+.drawer-item-title { font-size: 13px; font-weight: 600; }
 
 /* Team member chips in teams tab */
 .team-member-chip {

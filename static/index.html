@@ -553,6 +553,25 @@
   </div>
 </div>
 
+<!-- Person Detail Drawer -->
+<div id="person-drawer" class="person-drawer hidden">
+  <div class="person-drawer-overlay" onclick="closePersonDrawer()"></div>
+  <div class="person-drawer-panel">
+    <div class="person-drawer-header">
+      <div>
+        <div class="person-drawer-role" id="drawer-role"></div>
+        <div class="person-drawer-name" id="drawer-name"></div>
+        <div class="person-drawer-email" id="drawer-email" dir="ltr"></div>
+      </div>
+      <button class="btn-ghost" onclick="closePersonDrawer()">✕</button>
+    </div>
+    <div class="person-drawer-stats" id="drawer-stats"></div>
+    <div class="person-drawer-body" id="drawer-body">
+      <p style="color:var(--gray-400)">טוען...</p>
+    </div>
+  </div>
+</div>
+
 <!-- Add Team Member Modal -->
 <div id="add-member-modal" class="modal hidden">
   <div class="modal-overlay" onclick="closeAddMemberModal()"></div>
