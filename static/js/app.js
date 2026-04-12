@@ -600,7 +600,9 @@ async function loadAdmin() {
 function showAdminTab(tab) {
   document.querySelectorAll('.admin-tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(`admin-tab-${tab}`).classList.add('active');
+  const tabEl = document.getElementById(`admin-tab-${tab}`);
+  tabEl.classList.remove('hidden');
+  tabEl.classList.add('active');
   event.target.classList.add('active');
 
   if (tab === 'org') loadOrgTree();
