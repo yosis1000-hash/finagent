@@ -1187,23 +1187,60 @@ function openCreateUserModal() {
 function closeCreateUserModal() {
   document.getElementById('create-user-modal').classList.add('hidden');
   document.getElementById('create-user-form').reset();
+  document.getElementById('cu-temp-password-box').classList.add('hidden');
+  document.getElementById('cu-parent-preset').value = '';
+  const submitBtn = document.getElementById('create-user-form').querySelector('button[type="submit"]');
+  submitBtn.textContent = 'צור משתמש';
+  document.getElementById('create-user-form').onsubmit = submitCreateUser;
+}
+
+function genTempPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from({length: 10}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
 async function submitCreateUser(e) {
   e.preventDefault();
+  let password = document.getElementById('cu-password').value;
+  let tempGenerated = null;
+  if (!password) {
+    tempGenerated = genTempPassword();
+    password = tempGenerated;
+  }
+
+  const presetParent = document.getElementById('cu-parent-preset').value;
   const payload = {
     name: document.getElementById('cu-name').value,
     email: document.getElementById('cu-email').value,
-    password: document.getElementById('cu-password').value,
+    password,
     role_type: document.getElementById('cu-role').value,
-    parent_id: document.getElementById('cu-parent').value ? parseInt(document.getElementById('cu-parent').value) : null,
+    parent_id: document.getElementById('cu-parent').value
+      ? parseInt(document.getElementById('cu-parent').value)
+      : (presetParent ? parseInt(presetParent) : null),
     report_frequency: document.getElementById('cu-report-freq').value,
   };
   try {
     await API.createUser(payload);
     await loadUsersTable();
-    closeCreateUserModal();
-    showToast('משתמש נוצר בהצלחה', 'success');
+    await loadUsers();
+
+    if (tempGenerated) {
+      // Show temp password before closing
+      document.getElementById('cu-temp-password-val').textContent = tempGenerated;
+      document.getElementById('cu-temp-password-box').classList.remove('hidden');
+      document.getElementById('create-user-form').querySelector('button[type="submit"]').textContent = 'סגור';
+      document.getElementById('create-user-form').onsubmit = (ev) => { ev.preventDefault(); closeCreateUserModal(); };
+      showToast('משתמש נוצר — שמור את הסיסמה הזמנית!', 'success');
+    } else {
+      closeCreateUserModal();
+      showToast('משתמש נוצר בהצלחה', 'success');
+    }
+
+    // Refresh org tree if it's currently visible
+    if (!document.getElementById('panel-admin').classList.contains('hidden') &&
+        document.getElementById('admin-tab-org').classList.contains('active')) {
+      loadOrgTree();
+    }
   } catch (err) {
     showToast('שגיאה: ' + err.message, 'error');
   }
