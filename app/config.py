@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 480
     database_url: str = "sqlite:///./finagent.db"
 
-    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
 
     gmail_client_id: str = ""
     gmail_client_secret: str = ""

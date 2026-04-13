@@ -1,25 +1,28 @@
-"""Claude AI integration for FinAgent."""
+"""Gemini AI integration for FinAgent."""
 import json
 import logging
 from typing import Optional, Tuple
-import anthropic
+import google.generativeai as genai
 from app.config import get_settings
 from app.mailbox_identity import body_mentions_agent, build_mailbox_aliases
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-_client: Optional[anthropic.AsyncAnthropic] = None
+MODEL = "gemini-2.5-flash"
 
 
-def get_client() -> anthropic.AsyncAnthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return _client
+def _get_model() -> genai.GenerativeModel:
+    genai.configure(api_key=settings.gemini_api_key)
+    return genai.GenerativeModel(MODEL)
 
 
-MODEL = "claude-sonnet-4-20250514"
+def _extract_json(text: str) -> Optional[str]:
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start >= 0 and end > start:
+        return text[start:end]
+    return None
 
 
 async def extract_tasks_from_email(
@@ -29,12 +32,7 @@ async def extract_tasks_from_email(
     recipients: list[str],
     known_users: list[dict],
 ) -> dict:
-    """
-    Analyze an email and extract tasks, follow-ups, deadlines, and commitments.
-    Returns a structured dict.
-    """
-    client = get_client()
-
+    """Analyze an email and extract tasks, follow-ups, deadlines, and commitments."""
     users_str = "\n".join(f"- {u['name']} <{u['email']}> ({u['role_type']})" for u in known_users)
 
     prompt = f"""You are FinAgent, an AI office manager for the Financial Division of the Bank of Israel.
@@ -70,19 +68,13 @@ Return a JSON object with the following structure:
 Only include items that are clearly actionable or trackable. If nothing actionable is found, return empty arrays."""
 
     try:
-        response = await client.messages.create(
-            model=MODEL,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        content = response.content[0].text
-        # Extract JSON from response
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(content[start:end])
+        model = _get_model()
+        response = await model.generate_content_async(prompt)
+        raw = _extract_json(response.text)
+        if raw:
+            return json.loads(raw)
     except Exception as e:
-        logger.error(f"Claude email extraction error: {e}")
+        logger.error(f"Gemini email extraction error: {e}")
 
     return {"tasks": [], "implicit_commitments": [], "mentioned_deadlines": [], "summary": ""}
 
@@ -94,8 +86,6 @@ async def generate_item_summary(
     item_type: str,
 ) -> str:
     """Generate an AI summary for a work item's current state."""
-    client = get_client()
-
     log_text = "\n".join(activity_log[-20:]) if activity_log else "No activity yet."
 
     prompt = f"""Summarize the current state of this {item_type} in 2-3 sentences.
@@ -109,14 +99,11 @@ Be concise and focus on current status, what has been done, and what remains.
 Write in Hebrew if the title/description is in Hebrew, otherwise in English."""
 
     try:
-        response = await client.messages.create(
-            model=MODEL,
-            max_tokens=256,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.content[0].text.strip()
+        model = _get_model()
+        response = await model.generate_content_async(prompt)
+        return response.text.strip()
     except Exception as e:
-        logger.error(f"Claude summary error: {e}")
+        logger.error(f"Gemini summary error: {e}")
         return ""
 
 
@@ -125,12 +112,7 @@ async def score_report(
     open_tasks: list[str],
     user_name: str,
 ) -> Tuple[int, str]:
-    """
-    Score a submitted status report on a 1-5 scale.
-    Returns (score, reasoning).
-    """
-    client = get_client()
-
+    """Score a submitted status report on a 1-5 scale. Returns (score, reasoning)."""
     tasks_str = "\n".join(f"- {t}" for t in open_tasks) if open_tasks else "No open tasks."
 
     prompt = f"""You are evaluating a status report submitted by {user_name}.
@@ -152,19 +134,14 @@ Respond with a JSON object:
 {{"score": <number 1-5>, "reasoning": "<one or two sentences explaining the score>"}}"""
 
     try:
-        response = await client.messages.create(
-            model=MODEL,
-            max_tokens=256,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        content = response.content[0].text
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start >= 0 and end > start:
-            data = json.loads(content[start:end])
+        model = _get_model()
+        response = await model.generate_content_async(prompt)
+        raw = _extract_json(response.text)
+        if raw:
+            data = json.loads(raw)
             return int(data.get("score", 3)), data.get("reasoning", "")
     except Exception as e:
-        logger.error(f"Claude report scoring error: {e}")
+        logger.error(f"Gemini report scoring error: {e}")
 
     return 3, "Could not score automatically."
 
@@ -173,11 +150,7 @@ async def parse_finagent_command(
     body: str,
     known_users: list[dict],
 ) -> Optional[dict]:
-    """
-    Parse a @FinAgent command from an email body.
-    Returns structured command dict or None.
-    """
-    client = get_client()
+    """Parse a @FinAgent command from an email body. Returns structured command dict or None."""
     if not body_mentions_agent(body):
         return None
 
@@ -206,18 +179,13 @@ Identify the command and return JSON:
 If no clear @FinAgent command found, return {{"command": null}}."""
 
     try:
-        response = await client.messages.create(
-            model=MODEL,
-            max_tokens=256,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        content = response.content[0].text
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(content[start:end])
+        model = _get_model()
+        response = await model.generate_content_async(prompt)
+        raw = _extract_json(response.text)
+        if raw:
+            return json.loads(raw)
     except Exception as e:
-        logger.error(f"Claude command parse error: {e}")
+        logger.error(f"Gemini command parse error: {e}")
 
     return None
 
@@ -229,8 +197,6 @@ async def generate_weekly_digest(
     top_insights: list[str],
 ) -> str:
     """Generate a weekly digest email body for the Division Head."""
-    client = get_client()
-
     prompt = f"""Generate a weekly division activity digest in Hebrew for the Division Head.
 
 Statistics:
@@ -251,12 +217,9 @@ Key insights:
 Write a professional, concise digest in Hebrew (2-3 paragraphs). Use clear formatting with bullet points where appropriate."""
 
     try:
-        response = await client.messages.create(
-            model=MODEL,
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.content[0].text.strip()
+        model = _get_model()
+        response = await model.generate_content_async(prompt)
+        return response.text.strip()
     except Exception as e:
-        logger.error(f"Claude weekly digest error: {e}")
+        logger.error(f"Gemini weekly digest error: {e}")
         return "שגיאה ביצירת הסיכום השבועי."
