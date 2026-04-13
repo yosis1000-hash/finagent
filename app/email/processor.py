@@ -11,15 +11,13 @@ from app.models.models import (
 from app.ai.claude import extract_tasks_from_email, parse_finagent_command
 from app.email.gmail import fetch_unread_emails, mark_as_read
 from app.email.notifications import dispatch_task_assigned
+from app.mailbox_identity import body_mentions_agent, is_addressed_to_agent
 
 logger = logging.getLogger(__name__)
 
-FINAGENT_EMAIL_ALIASES = {"finagent@gmail.com", "finagent"}
-
 
 def is_finagent_addressed(email_data: dict, finagent_email: str) -> bool:
-    all_addresses = set(email_data["recipients_emails"])
-    return finagent_email.lower() in all_addresses
+    return is_addressed_to_agent(email_data["recipients_emails"], finagent_email)
 
 
 def resolve_user(db: Session, email_address: str) -> Optional[User]:
@@ -55,7 +53,7 @@ async def process_single_email(db: Session, raw: dict, finagent_email: str):
     # Check for @FinAgent command
     body = raw.get("body_text", "")
     command_data = None
-    if is_finagent_addressed(raw, finagent_email) or "@finagent" in body.lower():
+    if is_finagent_addressed(raw, finagent_email) or body_mentions_agent(body, finagent_email):
         command_data = await parse_finagent_command(body, known_users)
 
     # AI extraction (Observation Mode + Command Mode)

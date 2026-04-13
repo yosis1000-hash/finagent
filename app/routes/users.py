@@ -1,9 +1,9 @@
-import json
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import User, RoleType, AuditLog, OrgConfig, WorkItem, ItemStatus, Team, TeamMember
+from app.models.models import User, RoleType, AuditLog, WorkItem, ItemStatus, Team, TeamMember
+from app.org_config import build_default_config, load_org_config, save_org_config
 from app.schemas.schemas import UserCreate, UserUpdate, UserOut
 from app.auth.auth import get_current_user, hash_password, require_roles
 
@@ -21,6 +21,7 @@ DEFAULT_CONFIG = {
         "external": "חיצוני",
     }
 }
+DEFAULT_CONFIG = build_default_config()
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -53,14 +54,7 @@ def get_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    row = db.query(OrgConfig).first()
-    if not row:
-        return DEFAULT_CONFIG
-    stored = json.loads(row.config_json)
-    # Merge with defaults so new keys are always present
-    merged = {**DEFAULT_CONFIG, **stored}
-    merged["role_labels"] = {**DEFAULT_CONFIG["role_labels"], **stored.get("role_labels", {})}
-    return merged
+    return load_org_config(db)
 
 
 @router.put("/config")
@@ -69,14 +63,7 @@ def update_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(RoleType.division_head, RoleType.office_manager)),
 ):
-    row = db.query(OrgConfig).first()
-    if not row:
-        row = OrgConfig(config_json=json.dumps(payload))
-        db.add(row)
-    else:
-        row.config_json = json.dumps(payload)
-    db.commit()
-    return payload
+    return save_org_config(db, payload)
 
 
 @router.get("/org-tree")

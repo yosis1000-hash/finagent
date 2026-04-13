@@ -12,9 +12,9 @@ class Settings(BaseSettings):
     gmail_client_id: str = ""
     gmail_client_secret: str = ""
     gmail_refresh_token: str = ""
-    gmail_address: str = "finagent@gmail.com"
+    gmail_address: str = "boi.finagent@gmail.com"
 
-    smtp_from: str = "finagent@gmail.com"
+    smtp_from: str = "boi.finagent@gmail.com"
     app_url: str = "http://localhost:8000"
 
     class Config:

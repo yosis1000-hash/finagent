@@ -1,9 +1,9 @@
 """Seed initial data: Division Head user and default org structure."""
 import logging
-from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.models import User, RoleType, ReportFrequency
 from app.auth.auth import hash_password
+from app.org_config import ensure_org_config
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 async def init_db():
     db = SessionLocal()
     try:
+        ensure_org_config(db)
+
         if db.query(User).count() > 0:
             return  # Already seeded
 
@@ -114,7 +116,7 @@ async def init_db():
             ))
 
         db.commit()
-        logger.info("Database seeded successfully. Division Head: yossi.saadon@boi.org.il / Admin1234!")
+        logger.info("Database seeded successfully. Division Head: yossef.saadon@gmail.com / Admin1234!")
     except Exception as e:
         logger.error(f"Seeding error: {e}")
         db.rollback()

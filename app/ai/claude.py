@@ -4,6 +4,7 @@ import logging
 from typing import Optional, Tuple
 import anthropic
 from app.config import get_settings
+from app.mailbox_identity import body_mentions_agent, build_mailbox_aliases
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -177,12 +178,14 @@ async def parse_finagent_command(
     Returns structured command dict or None.
     """
     client = get_client()
-    if "@finagent" not in body.lower() and "@פינאגנט" not in body:
+    if not body_mentions_agent(body):
         return None
 
     users_str = "\n".join(f"- {u['name']} <{u['email']}>" for u in known_users)
+    aliases = ", ".join(sorted(build_mailbox_aliases()))
 
     prompt = f"""Parse the following email body for @FinAgent commands (the system supports Hebrew commands).
+The FinAgent mailbox may be referenced via any of these aliases: {aliases}
 
 Known users:
 {users_str}

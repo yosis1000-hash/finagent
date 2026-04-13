@@ -9,7 +9,12 @@ let currentView = 'list';
 
 // ─── Org Config (loaded from server, with defaults) ───
 let appConfig = {
-  org_name: 'אגף',
+  product_name: 'FinAgent',
+  org_name: 'האגף הפיננסי',
+  unit_label: 'יחידה ארגונית',
+  inbox_email: 'boi.finagent@gmail.com',
+  smtp_from: 'boi.finagent@gmail.com',
+  app_url: window.location.origin,
   role_labels: {
     division_head: 'ראש אגף',
     department_head: 'ראש מחלקה',
@@ -1165,7 +1170,7 @@ async function saveOrgSettings() {
     if (el && el.value.trim()) role_labels[key] = el.value.trim();
   });
   const payload = {
-    org_name: document.getElementById('cfg-org-name').value.trim() || 'אגף',
+    org_name: document.getElementById('cfg-org-name').value.trim() || 'האגף הפיננסי',
     role_labels,
   };
   try {
