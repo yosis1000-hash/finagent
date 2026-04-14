@@ -43,6 +43,7 @@ class UserOut(BaseModel):
     id: int
     name: str
     email: str
+    notification_email: Optional[str] = None
     role_type: str
     parent_id: Optional[int]
     report_frequency: str
