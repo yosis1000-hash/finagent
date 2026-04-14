@@ -44,6 +44,11 @@ h2 {{ color: #1a365d; margin-top: 0; }}
 </div></body></html>"""
 
 
+def _notify_email(user: User) -> str:
+    """Return notification_email if set, otherwise fall back to user.email."""
+    return user.notification_email or user.email
+
+
 async def dispatch_task_assigned(db: Session, item: WorkItem, assignee: User):
     subject = f"[FinAgent] משימה חדשה הוקצתה לך: {item.title}"
     body = f"""<p>שלום {assignee.name},</p>
@@ -52,7 +57,7 @@ async def dispatch_task_assigned(db: Session, item: WorkItem, assignee: User):
 {"<p>תיאור: " + (item.description or "") + "</p>" if item.description else ""}
 {"<p>תאריך יעד: " + str(item.deadline) + "</p>" if item.deadline else ""}
 <a href="{_item_url(db, item.id)}" class="btn">צפה במשימה</a>"""
-    await _send_and_record(db, assignee.email, subject, _html_wrapper(db, "משימה חדשה", body), "task_assigned", item.id)
+    await _send_and_record(db, _notify_email(assignee), subject, _html_wrapper(db, "משימה חדשה", body), "task_assigned", item.id)
 
 
 async def dispatch_deadline_reminder(db: Session, item: WorkItem, assignee: User, hours_until: int):
@@ -62,7 +67,7 @@ async def dispatch_deadline_reminder(db: Session, item: WorkItem, assignee: User
 <p>תזכורת: לקראת תאריך היעד של המשימה <strong>{item.title}</strong></p>
 <p>תאריך יעד: <strong>{item.deadline}</strong> ({label})</p>
 <a href="{_item_url(db, item.id)}" class="btn">עדכן סטטוס</a>"""
-    await _send_and_record(db, assignee.email, subject, _html_wrapper(db, "תזכורת תאריך יעד", body), "deadline_reminder", item.id)
+    await _send_and_record(db, _notify_email(assignee), subject, _html_wrapper(db, "תזכורת תאריך יעד", body), "deadline_reminder", item.id)
 
 
 async def dispatch_overdue_alert(db: Session, item: WorkItem, assignee: User, reporter: Optional[User]):
@@ -70,9 +75,9 @@ async def dispatch_overdue_alert(db: Session, item: WorkItem, assignee: User, re
     body = f"""<p>שלום {assignee.name},</p>
 <p>המשימה <strong>{item.title}</strong> עברה את תאריך היעד ({item.deadline}) ועדיין פתוחה.</p>
 <a href="{_item_url(db, item.id)}" class="btn">עדכן סטטוס</a>"""
-    await _send_and_record(db, assignee.email, subject, _html_wrapper(db, "משימה באיחור", body), "task_overdue", item.id)
+    await _send_and_record(db, _notify_email(assignee), subject, _html_wrapper(db, "משימה באיחור", body), "task_overdue", item.id)
     if reporter and reporter.email != assignee.email:
-        await _send_and_record(db, reporter.email, subject, _html_wrapper(db, "משימה באיחור", body), "task_overdue", item.id)
+        await _send_and_record(db, _notify_email(reporter), subject, _html_wrapper(db, "משימה באיחור", body), "task_overdue", item.id)
 
 
 async def dispatch_followup_reminder(db: Session, item: WorkItem, awaited_user: User):
@@ -81,7 +86,7 @@ async def dispatch_followup_reminder(db: Session, item: WorkItem, awaited_user: 
 <p>ממתינים לתגובתך בנושא: <strong>{item.title}</strong></p>
 {"<p>תאריך סיום צפוי: " + str(item.expected_by) + "</p>" if item.expected_by else ""}
 <a href="{_item_url(db, item.id)}" class="btn">צפה בפרטים</a>"""
-    await _send_and_record(db, awaited_user.email, subject, _html_wrapper(db, "ממתין לתגובה", body), "followup_reminder", item.id)
+    await _send_and_record(db, _notify_email(awaited_user), subject, _html_wrapper(db, "ממתין לתגובה", body), "followup_reminder", item.id)
 
 
 async def dispatch_report_prompt(db: Session, user: User, open_tasks: list):
@@ -91,13 +96,13 @@ async def dispatch_report_prompt(db: Session, user: User, open_tasks: list):
 <p>נא להגיש עדכון סטטוס עבור המשימות הפתוחות שלך:</p>
 <ul>{tasks_html}</ul>
 <a href="{_base_url(db)}/#/report" class="btn">הגש דיווח</a>"""
-    await _send_and_record(db, user.email, subject, _html_wrapper(db, "הגשת דיווח", body), "report_prompt", None)
+    await _send_and_record(db, _notify_email(user), subject, _html_wrapper(db, "הגשת דיווח", body), "report_prompt", None)
 
 
 async def dispatch_weekly_digest(db: Session, division_head: User, digest_html: str):
     subject = "[FinAgent] סיכום שבועי - מחלקה פיננסית"
     body = f"<p>שלום {division_head.name},</p>{digest_html}"
-    await _send_and_record(db, division_head.email, subject, _html_wrapper(db, "סיכום שבועי", body), "weekly_digest", None)
+    await _send_and_record(db, _notify_email(division_head), subject, _html_wrapper(db, "סיכום שבועי", body), "weekly_digest", None)
 
 
 async def _send_and_record(

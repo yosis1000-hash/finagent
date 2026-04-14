@@ -40,12 +40,15 @@ def get_gmail_service():
 
 
 def fetch_unread_emails(max_results: int = 50) -> list[dict]:
-    """Fetch unread emails from the FinAgent inbox."""
+    """Fetch unread inbox emails from the FinAgent inbox.
+    Uses is:unread to stay efficient; deduplication by gmail_message_id
+    in the processor prevents re-processing.
+    """
     try:
         service = get_gmail_service()
         results = service.users().messages().list(
             userId="me",
-            q="is:unread",
+            q="is:unread in:inbox",
             maxResults=max_results,
         ).execute()
 

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_
 from app.database import get_db
 from app.models.models import (
-    WorkItem, User, Team, AuditLog,
+    WorkItem, User, Team, AuditLog, Email,
     RoleType, ItemType, ItemStatus, Priority
 )
 from app.schemas.schemas import WorkItemCreate, WorkItemUpdate, WorkItemOut
@@ -61,6 +61,7 @@ def list_items(
     query = db.query(WorkItem).options(
         joinedload(WorkItem.assignee),
         joinedload(WorkItem.reporter),
+        joinedload(WorkItem.source_email),
     )
     query = _scope_filter(query, current_user, db)
 
@@ -91,6 +92,7 @@ def get_item(
     item = db.query(WorkItem).options(
         joinedload(WorkItem.assignee),
         joinedload(WorkItem.reporter),
+        joinedload(WorkItem.source_email),
     ).filter(WorkItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")

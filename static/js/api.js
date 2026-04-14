@@ -88,6 +88,13 @@ const API = {
   myReports: () => API.get('/api/reports/my'),
   allReports: () => API.get('/api/reports/'),
 
+  // Emails
+  emailsForItem: (itemId) => API.get(`/api/emails/item/${itemId}`),
+  emails: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return API.get('/api/emails/' + (qs ? '?' + qs : ''));
+  },
+
   // Audit
   auditLogs: () => API.get('/api/users/audit-logs'),
 

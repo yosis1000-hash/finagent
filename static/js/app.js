@@ -291,10 +291,24 @@ async function openItemModal(itemId) {
   const modal = document.getElementById('item-modal');
   modal.classList.remove('hidden');
 
+  // Clear email thread while loading
+  document.getElementById('modal-email-section').classList.add('hidden');
+  document.getElementById('modal-email-thread').innerHTML = '';
+
   try {
-    const item = await API.item(itemId);
-    const activity = await API.itemActivity(itemId);
+    const [item, activity] = await Promise.all([
+      API.item(itemId),
+      API.itemActivity(itemId),
+    ]);
     populateItemModal(item, activity);
+
+    // Load email thread if this item originated from an email
+    if (item.source_email_id) {
+      try {
+        const emails = await API.emailsForItem(itemId);
+        populateEmailThread(emails, item.source_email_id);
+      } catch (_) { /* email section stays hidden */ }
+    }
   } catch (err) {
     showToast('שגיאה בטעינת פריט', 'error');
     closeItemModal();
@@ -347,6 +361,47 @@ function populateItemModal(item, activity) {
       </div>
     `).join('');
   }
+}
+
+function populateEmailThread(emails, sourceEmailId) {
+  if (!emails || emails.length === 0) return;
+
+  const section = document.getElementById('modal-email-section');
+  const container = document.getElementById('modal-email-thread');
+  section.classList.remove('hidden');
+
+  container.innerHTML = emails.map((e, idx) => {
+    const isSource = e.id === sourceEmailId;
+    const dateStr = e.received_at ? formatDate(e.received_at) : '';
+    const bodyId = `email-body-${e.id}`;
+    const bodyText = (e.body_text || '').trim();
+    // First message and source message are expanded by default
+    const expanded = idx === 0 || isSource;
+
+    return `
+      <div class="email-message">
+        <div class="email-message-header" onclick="toggleEmailBody('${bodyId}')">
+          <div class="email-meta">
+            <div class="email-from">${escHtml(e.sender_email)}
+              ${isSource ? '<span class="email-source-badge">מקור</span>' : ''}
+            </div>
+            <div class="email-subject">${escHtml(e.subject || '(ללא נושא)')}</div>
+          </div>
+          <div class="email-date">${escHtml(dateStr)}</div>
+        </div>
+        ${bodyText ? `
+          <div id="${bodyId}" class="email-body${expanded ? ' expanded' : ''}">
+            ${escHtml(bodyText)}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleEmailBody(bodyId) {
+  const el = document.getElementById(bodyId);
+  if (el) el.classList.toggle('expanded');
 }
 
 function closeItemModal() {

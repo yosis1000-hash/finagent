@@ -29,6 +29,7 @@ async def init_db():
         head = User(
             name="יוסי סעדון",
             email="yosis@boi.org.il",
+            notification_email="yossef.saadon@gmail.com",
             hashed_password=hash_password(PW_ADMIN),
             role_type=RoleType.division_head,
             report_frequency=ReportFrequency.none,
@@ -54,6 +55,7 @@ async def init_db():
         section_a = User(
             name="ד״ר רחל לוי",
             email="rachel.levy@boi.org.il",
+            notification_email="yosis1000@gmail.com",
             hashed_password=hash_password(PW_SECTION),
             role_type=RoleType.section_head,
             parent_id=head.id,
@@ -67,6 +69,7 @@ async def init_db():
         section_b = User(
             name="עמית גולן",
             email="amit.golan@boi.org.il",
+            notification_email="newsflow.app@gmail.com",
             hashed_password=hash_password(PW_SECTION),
             role_type=RoleType.section_head,
             parent_id=head.id,
@@ -78,6 +81,7 @@ async def init_db():
 
         # ── Economists under Section A ─────────────────────────────────────────
         econ_a1 = User(name="דוד כהן",    email="david.cohen@boi.org.il",
+                       notification_email="saadons.family@gmail.com",
                        hashed_password=hash_password(PW_ECON),
                        role_type=RoleType.economist, parent_id=section_a.id,
                        report_frequency=ReportFrequency.weekly, is_active=True)

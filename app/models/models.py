@@ -88,6 +88,7 @@ class User(Base):
     report_frequency: Mapped[str] = mapped_column(
         SAEnum(ReportFrequency), nullable=False, default=ReportFrequency.weekly
     )
+    notification_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

@@ -91,8 +91,6 @@ class TeamMemberAdd(BaseModel):
     user_id: int
 
 
-# ─── Work Items ───────────────────────────────────────────────────────────────
-
 class WorkItemCreate(BaseModel):
     type: ItemType
     title: str
@@ -127,6 +125,26 @@ class WorkItemUpdate(BaseModel):
     expected_by: Optional[date] = None
 
 
+# ─── Emails ───────────────────────────────────────────────────────────────────
+
+class EmailOut(BaseModel):
+    id: int
+    gmail_message_id: str
+    thread_id: Optional[str]
+    sender_email: str
+    recipients_json: Optional[str]
+    subject: Optional[str]
+    body_text: Optional[str]
+    has_attachments: bool
+    linked_item_id: Optional[int]
+    received_at: datetime
+    processed_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+# ─── Work Items ───────────────────────────────────────────────────────────────
+
 class WorkItemOut(BaseModel):
     id: int
     type: str
@@ -138,6 +156,7 @@ class WorkItemOut(BaseModel):
     reporter_user_id: Optional[int]
     team_id: Optional[int]
     parent_item_id: Optional[int]
+    source_email_id: Optional[int]
     deadline: Optional[date]
     completed_at: Optional[datetime]
     ai_summary: Optional[str]
@@ -150,6 +169,7 @@ class WorkItemOut(BaseModel):
     updated_at: datetime
     assignee: Optional[UserOutBrief] = None
     reporter: Optional[UserOutBrief] = None
+    source_email: Optional[EmailOut] = None
 
     model_config = {"from_attributes": True}
 

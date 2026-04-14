@@ -81,6 +81,23 @@ async def process_single_email(db: Session, raw: dict, finagent_email: str):
     db.add(email_record)
     db.flush()
 
+    # Check if this email belongs to an existing thread with a linked item
+    existing_thread_item = None
+    if raw.get("thread_id"):
+        prior_email = (
+            db.query(Email)
+            .filter(
+                Email.thread_id == raw["thread_id"],
+                Email.linked_item_id.isnot(None),
+                Email.id != email_record.id,
+            )
+            .order_by(Email.received_at.desc())
+            .first()
+        )
+        if prior_email:
+            existing_thread_item = prior_email.linked_item_id
+            email_record.linked_item_id = prior_email.linked_item_id
+
     # Execute command if present
     created_item = None
     if command_data and command_data.get("command"):
@@ -88,10 +105,12 @@ async def process_single_email(db: Session, raw: dict, finagent_email: str):
             db, command_data, email_record, sender_user, known_users, raw
         )
 
-    # Create tasks from AI extraction (Observation Mode, if no explicit command)
+    # Create tasks from AI extraction (Observation Mode, if no explicit command
+    # and this is NOT a continuation of an existing thread)
     if not command_data or not command_data.get("command"):
-        for task_data in extraction.get("tasks", []):
-            await _create_item_from_extraction(db, task_data, email_record, sender_user, known_users)
+        if not existing_thread_item:
+            for task_data in extraction.get("tasks", []):
+                await _create_item_from_extraction(db, task_data, email_record, sender_user, known_users)
 
     db.commit()
 
@@ -117,8 +136,15 @@ async def _execute_command(
     if command_data.get("target_person"):
         target_user = resolve_user(db, command_data["target_person"])
 
+    def _link(item: WorkItem) -> WorkItem:
+        """Flush item to get its id, then backlink the email to it."""
+        db.add(item)
+        db.flush()
+        email_record.linked_item_id = item.id
+        return item
+
     if cmd == "followup":
-        item = WorkItem(
+        return _link(WorkItem(
             type=ItemType.followup,
             title=f"מעקב: {raw.get('subject', 'ללא נושא')}",
             description=email_record.body_text[:500] if email_record.body_text else None,
@@ -127,39 +153,32 @@ async def _execute_command(
             awaited_from_user_id=target_user.id if target_user else None,
             expected_by=_parse_date(command_data.get("deadline")),
             source_email_id=email_record.id,
-        )
-        db.add(item)
-        return item
+        ))
 
     elif cmd == "create_task":
-        assignee = target_user
-        item = WorkItem(
+        return _link(WorkItem(
             type=ItemType.task,
             title=command_data.get("title") or f"משימה: {raw.get('subject', '')}",
             description=email_record.body_text[:500] if email_record.body_text else None,
             status=ItemStatus.open,
             priority=Priority.medium,
             reporter_user_id=reporter_id,
-            assignee_user_id=assignee.id if assignee else None,
+            assignee_user_id=target_user.id if target_user else None,
             deadline=_parse_date(command_data.get("deadline")),
             source_email_id=email_record.id,
-        )
-        db.add(item)
-        return item
+        ))
 
     elif cmd == "create_project":
-        item = WorkItem(
+        return _link(WorkItem(
             type=ItemType.project,
             title=command_data.get("title") or command_data.get("project_name") or f"פרויקט: {raw.get('subject', '')}",
             status=ItemStatus.planning,
             reporter_user_id=reporter_id,
             source_email_id=email_record.id,
-        )
-        db.add(item)
-        return item
+        ))
 
     elif cmd == "reminder":
-        item = WorkItem(
+        return _link(WorkItem(
             type=ItemType.reminder,
             title=command_data.get("message") or f"תזכורת: {raw.get('subject', '')}",
             status=ItemStatus.open,
@@ -167,9 +186,7 @@ async def _execute_command(
             reminder_message=command_data.get("message"),
             reminder_delivery_at=_parse_date_as_datetime(command_data.get("deadline")),
             source_email_id=email_record.id,
-        )
-        db.add(item)
-        return item
+        ))
 
     elif cmd == "complete":
         # Find the most recent open item linked to this thread
@@ -214,6 +231,10 @@ async def _create_item_from_extraction(
         source_email_id=email_record.id,
     )
     db.add(item)
+    db.flush()
+    # Backlink: the email knows which item it created
+    if not email_record.linked_item_id:
+        email_record.linked_item_id = item.id
 
 
 def _parse_date(value) -> Optional[date]:

@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routes import auth, users, teams, work_items, dashboard, reports
+from app.routes import auth, users, teams, work_items, dashboard, reports, emails
 from app.scheduler import start_scheduler
 from app import seed
 
@@ -48,6 +48,7 @@ app.include_router(teams.router)
 app.include_router(work_items.router)
 app.include_router(dashboard.router)
 app.include_router(reports.router)
+app.include_router(emails.router)
 
 # Serve static frontend
 app.mount("/static", StaticFiles(directory="static"), name="static")

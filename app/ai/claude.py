@@ -2,19 +2,29 @@
 import json
 import logging
 from typing import Optional, Tuple
-import google.generativeai as genai
+import httpx
 from app.config import get_settings
 from app.mailbox_identity import body_mentions_agent, build_mailbox_aliases
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-2.5-flash-lite"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 
 
-def _get_model() -> genai.GenerativeModel:
-    genai.configure(api_key=settings.gemini_api_key)
-    return genai.GenerativeModel(MODEL)
+async def _generate(prompt: str) -> str:
+    """Call Gemini REST API directly using httpx (UTF-8 safe, no gRPC)."""
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    async with httpx.AsyncClient(timeout=60) as client:
+        r = await client.post(
+            GEMINI_URL,
+            params={"key": settings.gemini_api_key},
+            json=payload,
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def _extract_json(text: str) -> Optional[str]:
@@ -68,9 +78,8 @@ Return a JSON object with the following structure:
 Only include items that are clearly actionable or trackable. If nothing actionable is found, return empty arrays."""
 
     try:
-        model = _get_model()
-        response = await model.generate_content_async(prompt)
-        raw = _extract_json(response.text)
+        text = await _generate(prompt)
+        raw = _extract_json(text)
         if raw:
             return json.loads(raw)
     except Exception as e:
@@ -99,9 +108,7 @@ Be concise and focus on current status, what has been done, and what remains.
 Write in Hebrew if the title/description is in Hebrew, otherwise in English."""
 
     try:
-        model = _get_model()
-        response = await model.generate_content_async(prompt)
-        return response.text.strip()
+        return (await _generate(prompt)).strip()
     except Exception as e:
         logger.error(f"Gemini summary error: {e}")
         return ""
@@ -134,9 +141,8 @@ Respond with a JSON object:
 {{"score": <number 1-5>, "reasoning": "<one or two sentences explaining the score>"}}"""
 
     try:
-        model = _get_model()
-        response = await model.generate_content_async(prompt)
-        raw = _extract_json(response.text)
+        text = await _generate(prompt)
+        raw = _extract_json(text)
         if raw:
             data = json.loads(raw)
             return int(data.get("score", 3)), data.get("reasoning", "")
@@ -179,9 +185,8 @@ Identify the command and return JSON:
 If no clear @FinAgent command found, return {{"command": null}}."""
 
     try:
-        model = _get_model()
-        response = await model.generate_content_async(prompt)
-        raw = _extract_json(response.text)
+        text = await _generate(prompt)
+        raw = _extract_json(text)
         if raw:
             return json.loads(raw)
     except Exception as e:
@@ -217,9 +222,7 @@ Key insights:
 Write a professional, concise digest in Hebrew (2-3 paragraphs). Use clear formatting with bullet points where appropriate."""
 
     try:
-        model = _get_model()
-        response = await model.generate_content_async(prompt)
-        return response.text.strip()
+        return (await _generate(prompt)).strip()
     except Exception as e:
         logger.error(f"Gemini weekly digest error: {e}")
         return "שגיאה ביצירת הסיכום השבועי."
