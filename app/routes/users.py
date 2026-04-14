@@ -323,3 +323,43 @@ h2 {{ color: #1a365d; }}
             failed.append({"name": user.name, "email": user.notification_email, "error": str(e)})
 
     return {"status": "ok", "sent": sent, "failed": failed}
+
+
+@router.post("/admin/migrate-notification-email", status_code=200)
+def migrate_notification_email(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    One-time migration: add notification_email column if missing, then set real Gmail addresses
+    for the four key users. Division head only.
+    """
+    if current_user.role_type != RoleType.division_head:
+        raise HTTPException(status_code=403, detail="Division head only")
+
+    from sqlalchemy import text
+
+    # Add column if it doesn't exist (SQLite allows this safely)
+    try:
+        db.execute(text("ALTER TABLE users ADD COLUMN notification_email VARCHAR(200)"))
+        db.commit()
+    except Exception:
+        pass  # Column already exists — that's fine
+
+    # Map BOI email → real notification email
+    mappings = {
+        "yosis@boi.org.il": "yossef.saadon@gmail.com",
+        "rachel.levy@boi.org.il": "yosis1000@gmail.com",
+        "amit.golan@boi.org.il": "newsflow.app@gmail.com",
+        "david.cohen@boi.org.il": "saadons.family@gmail.com",
+    }
+
+    updated = []
+    for boi_email, gmail in mappings.items():
+        user = db.query(User).filter(User.email == boi_email).first()
+        if user:
+            user.notification_email = gmail
+            updated.append({"name": user.name, "boi_email": boi_email, "notification_email": gmail})
+
+    db.commit()
+    return {"status": "ok", "updated": updated}
