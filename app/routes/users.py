@@ -363,3 +363,19 @@ def migrate_notification_email(
 
     db.commit()
     return {"status": "ok", "updated": updated}
+
+
+@router.post("/admin/trigger-email-poll", status_code=200)
+async def trigger_email_poll(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually trigger one email poll cycle. Division head only."""
+    if current_user.role_type != RoleType.division_head:
+        raise HTTPException(status_code=403, detail="Division head only")
+
+    from app.email.processor import process_incoming_emails
+    from app.config import get_settings
+    settings = get_settings()
+    await process_incoming_emails(db, settings.gmail_address)
+    return {"status": "ok", "message": "Email poll triggered"}
