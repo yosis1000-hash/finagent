@@ -13,10 +13,26 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _run_migrations():
+    """Apply any pending schema migrations that create_all can't handle."""
+    from sqlalchemy import text, inspect
+    with engine.connect() as conn:
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+        if "users" in existing_tables:
+            existing_cols = [c["name"] for c in inspector.get_columns("users")]
+            if "notification_email" not in existing_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN notification_email VARCHAR(200)"))
+                conn.commit()
+                logger.info("Migration: added notification_email column to users")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create all tables
     Base.metadata.create_all(bind=engine)
+    # Apply schema migrations for columns not handled by create_all
+    _run_migrations()
     # Seed initial data if DB is empty
     await seed.init_db()
     # Start background scheduler
