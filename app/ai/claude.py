@@ -58,21 +58,23 @@ Subject: {subject}
 Body:
 {body}
 
+IMPORTANT: All "title", "description", "implicit_commitments", "mentioned_deadlines", and "summary" fields must be written in the same language as the email. If the email is in Hebrew — write in Hebrew. Do NOT translate.
+
 Return a JSON object with the following structure:
 {{
   "tasks": [
     {{
-      "title": "task title",
-      "description": "details",
+      "title": "task title (in the email's language)",
+      "description": "details (in the email's language)",
       "assignee_email": "email or null",
       "deadline": "YYYY-MM-DD or null",
       "priority": "critical|high|medium|low",
       "type": "task|followup|reminder"
     }}
   ],
-  "implicit_commitments": ["description of commitment"],
-  "mentioned_deadlines": ["deadline description"],
-  "summary": "One-paragraph summary of the email's purpose"
+  "implicit_commitments": ["description of commitment (in the email's language)"],
+  "mentioned_deadlines": ["deadline description (in the email's language)"],
+  "summary": "One-paragraph summary of the email's purpose (in the email's language)"
 }}
 
 Only include items that are clearly actionable or trackable. If nothing actionable is found, return empty arrays."""
