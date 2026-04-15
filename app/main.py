@@ -25,6 +25,12 @@ def _run_migrations():
                 conn.execute(text("ALTER TABLE users ADD COLUMN notification_email VARCHAR(200)"))
                 conn.commit()
                 logger.info("Migration: added notification_email column to users")
+            # Fix legacy division head email
+            conn.execute(text(
+                "UPDATE users SET email = 'yossef.saadon@gmail.com' "
+                "WHERE email = 'yosis@boi.org.il'"
+            ))
+            conn.commit()
 
 
 @asynccontextmanager
