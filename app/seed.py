@@ -28,7 +28,7 @@ async def init_db():
         # ── Division Head ──────────────────────────────────────────────────────
         head = User(
             name="יוסי סעדון",
-            email="yosis@boi.org.il",
+            email="yossef.saadon@gmail.com",
             notification_email="yossef.saadon@gmail.com",
             hashed_password=hash_password(PW_ADMIN),
             role_type=RoleType.division_head,
@@ -163,7 +163,7 @@ async def init_db():
             "Full seed complete: 1 division_head, 1 office_manager, "
             "2 section_heads, 4 economists, 4 students, 2 cross-functional teams."
         )
-        logger.info("Division Head login: yosis@boi.org.il / Admin1234!")
+        logger.info("Division Head login: yossef.saadon@gmail.com / Admin1234!")
 
     except Exception as e:
         logger.error(f"Seeding error: {e}")

@@ -1,5 +1,14 @@
 /* FinAgent Main App */
 
+// ─── Password Toggle ──────────────────────────────
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isHidden = input.type === 'password';
+  input.type = isHidden ? 'text' : 'password';
+  btn.querySelector('.eye-open').classList.toggle('hidden', isHidden);
+  btn.querySelector('.eye-closed').classList.toggle('hidden', !isHidden);
+}
+
 // ─── State ────────────────────────────────────────
 let currentUser = null;
 let allItems = [];

@@ -399,6 +399,11 @@ body {
 .form-row { display: flex; gap: 12px; }
 .form-row .form-group { flex: 1; }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.password-input-wrapper { position: relative; }
+.password-input-wrapper input { padding-left: 40px !important; }
+.password-toggle-btn { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--gray-400); padding: 0; display: flex; align-items: center; }
+.password-toggle-btn:hover { color: var(--gray-600); }
+.eye-icon { width: 18px; height: 18px; }
 .error-msg { color: var(--danger); font-size: 13px; padding: 8px; background: #fff5f5; border-radius: var(--radius); margin-bottom: 10px; }
 
 /* ─── Detail Fields ──────────────────────────────── */
