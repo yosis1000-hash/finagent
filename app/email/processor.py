@@ -97,6 +97,18 @@ async def process_single_email(db: Session, raw: dict, finagent_email: str):
         if prior_email:
             existing_thread_item = prior_email.linked_item_id
             email_record.linked_item_id = prior_email.linked_item_id
+            # Add activity log to the existing item so the reply is tracked
+            linked_item = db.query(WorkItem).filter(WorkItem.id == existing_thread_item).first()
+            if linked_item:
+                db.add(AuditLog(
+                    actor_user_id=sender_user.id if sender_user else None,
+                    action="email_reply",
+                    entity_type="work_item",
+                    entity_id=existing_thread_item,
+                    work_item_id=existing_thread_item,
+                    details=f"תגובה בשרשור מ-{raw['sender_email']}: {raw.get('subject', '')}",
+                ))
+                linked_item.updated_at = datetime.utcnow()
 
     # Execute command if present
     created_item = None
@@ -105,12 +117,13 @@ async def process_single_email(db: Session, raw: dict, finagent_email: str):
             db, command_data, email_record, sender_user, known_users, raw
         )
 
-    # Create tasks from AI extraction (Observation Mode, if no explicit command
-    # and this is NOT a continuation of an existing thread)
+    # Create ONE consolidated item from AI extraction (Observation Mode):
+    # only if no explicit command and not a continuation of an existing thread.
     if not command_data or not command_data.get("command"):
         if not existing_thread_item:
-            for task_data in extraction.get("tasks", []):
-                await _create_item_from_extraction(db, task_data, email_record, sender_user, known_users)
+            tasks = extraction.get("tasks", [])
+            if tasks:
+                await _create_consolidated_item(db, tasks, email_record, sender_user, raw)
 
     db.commit()
 
@@ -199,6 +212,40 @@ async def _execute_command(
         return linked
 
     return None
+
+
+async def _create_consolidated_item(
+    db: Session,
+    tasks: list[dict],
+    email_record: Email,
+    sender_user,
+    raw: dict,
+):
+    """Create a single work item from all AI-extracted tasks for one email.
+    - 1 task  → create it as-is
+    - 2+ tasks → create one project item with the email subject as title
+                 and all tasks listed in the description
+    """
+    if len(tasks) == 1:
+        await _create_item_from_extraction(db, tasks[0], email_record, sender_user, [])
+        return
+
+    # Multiple tasks → one consolidated project
+    subject = raw.get("subject", "ללא נושא")
+    task_lines = "\n".join(f"• {t.get('title', '')}" for t in tasks)
+    item = WorkItem(
+        type=ItemType.project,
+        title=subject,
+        description=task_lines,
+        status=ItemStatus.planning,
+        priority=_parse_priority(tasks[0].get("priority")),
+        reporter_user_id=sender_user.id if sender_user else None,
+        source_email_id=email_record.id,
+    )
+    db.add(item)
+    db.flush()
+    if not email_record.linked_item_id:
+        email_record.linked_item_id = item.id
 
 
 async def _create_item_from_extraction(

@@ -48,7 +48,7 @@ def fetch_unread_emails(max_results: int = 50) -> list[dict]:
         service = get_gmail_service()
         results = service.users().messages().list(
             userId="me",
-            q="is:unread in:inbox",
+            q="in:inbox newer_than:3d",
             maxResults=max_results,
         ).execute()
 
