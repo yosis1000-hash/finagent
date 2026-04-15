@@ -6,6 +6,8 @@ from app.database import get_db
 from app.models.models import Email, WorkItem, User, RoleType
 from app.schemas.schemas import EmailOut
 from app.auth.auth import get_current_user
+from app.email.gmail import send_email
+from app.config import get_settings
 
 router = APIRouter(prefix="/api/emails", tags=["emails"])
 
@@ -81,3 +83,24 @@ def get_email(
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
     return email
+
+
+@router.post("/send-test")
+async def send_test_email(
+    to: str = Query(...),
+    cc: Optional[str] = Query(None),
+    subject: str = Query(...),
+    body: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin-only: send a test email via the FinAgent Gmail account."""
+    if current_user.role_type != RoleType.division_head:
+        raise HTTPException(status_code=403, detail="Division head only")
+    await send_email(
+        to=to,
+        subject=subject,
+        body_html=body,
+        cc=[cc] if cc else None,
+    )
+    return {"status": "sent", "to": to, "subject": subject}
