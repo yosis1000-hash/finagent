@@ -3,6 +3,7 @@ import json
 import logging
 from datetime import datetime, date
 from typing import Optional
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.models.models import (
     User, WorkItem, Email, AuditLog,
@@ -42,9 +43,10 @@ def resolve_primary_to(db: Session, raw: dict) -> Optional[User]:
 
 
 def resolve_user(db: Session, email_address: str) -> Optional[User]:
+    addr = email_address.lower()
     return db.query(User).filter(
-        User.email == email_address.lower(),
         User.is_active == True,
+        or_(User.email == addr, User.notification_email == addr),
     ).first()
 
 
