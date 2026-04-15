@@ -11,13 +11,34 @@ from app.models.models import (
 from app.ai.claude import extract_tasks_from_email, parse_finagent_command
 from app.email.gmail import fetch_unread_emails, mark_as_read
 from app.email.notifications import dispatch_task_assigned
-from app.mailbox_identity import body_mentions_agent, is_addressed_to_agent
+from app.mailbox_identity import body_mentions_agent, is_addressed_to_agent, build_mailbox_aliases
 
 logger = logging.getLogger(__name__)
 
 
 def is_finagent_addressed(email_data: dict, finagent_email: str) -> bool:
     return is_addressed_to_agent(email_data["recipients_emails"], finagent_email)
+
+
+def resolve_primary_to(db: Session, raw: dict) -> Optional[User]:
+    """Return the first TO recipient who is a known active user,
+    excluding the FinAgent mailbox itself and the sender."""
+    sender = raw.get("sender_email", "").lower()
+    finagent_aliases = build_mailbox_aliases()
+    for addr in raw.get("recipients_emails", []):
+        addr_lower = addr.strip().lower()
+        if addr_lower == sender:
+            continue
+        if addr_lower in finagent_aliases:
+            continue
+        # strip any dots/plus Gmail normalisation for alias check
+        local = addr_lower.split("@")[0]
+        if local in finagent_aliases or local.replace(".", "") in finagent_aliases:
+            continue
+        user = resolve_user(db, addr_lower)
+        if user:
+            return user
+    return None
 
 
 def resolve_user(db: Session, email_address: str) -> Optional[User]:
@@ -157,13 +178,16 @@ async def _execute_command(
         return item
 
     if cmd == "followup":
+        # Determine who we're waiting on: use the primary TO recipient,
+        # not the Gemini-parsed target_person (which is unreliable for Hebrew names).
+        awaited_user = resolve_primary_to(db, raw) or target_user
         return _link(WorkItem(
             type=ItemType.followup,
             title=f"מעקב: {raw.get('subject', 'ללא נושא')}",
             description=email_record.body_text[:500] if email_record.body_text else None,
             status=ItemStatus.waiting,
             reporter_user_id=reporter_id,
-            awaited_from_user_id=target_user.id if target_user else None,
+            awaited_from_user_id=awaited_user.id if awaited_user else None,
             expected_by=_parse_date(command_data.get("deadline")),
             source_email_id=email_record.id,
         ))
