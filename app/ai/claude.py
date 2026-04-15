@@ -1,6 +1,7 @@
 """Gemini AI integration for FinAgent."""
 import json
 import logging
+import re
 from typing import Optional, Tuple
 import httpx
 from app.config import get_settings
@@ -154,14 +155,58 @@ Respond with a JSON object:
     return 3, "Could not score automatically."
 
 
+_HEBREW_DATE_RE = re.compile(
+    r"(?:דד-?ליין|deadline)[:\s]+(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})"
+    r"|(\d{4}-\d{2}-\d{2})",
+    re.IGNORECASE,
+)
+
+_HEBREW_COMMANDS = [
+    # (pattern, command-name)
+    (re.compile(r"@\S*\s+למעקב", re.IGNORECASE), "followup"),
+    (re.compile(r"@\S*\s+צור\s+משימה", re.IGNORECASE), "create_task"),
+    (re.compile(r"@\S*\s+צור\s+פרויקט", re.IGNORECASE), "create_project"),
+    (re.compile(r"@\S*\s+תזכורת", re.IGNORECASE), "reminder"),
+    (re.compile(r"@\S*\s+סמן\s+כ?הושלם", re.IGNORECASE), "complete"),
+]
+
+
+def _parse_hebrew_command(body: str) -> Optional[dict]:
+    """Fast regex-based parser for common Hebrew @FinAgent commands.
+    Returns a partial command dict or None if no pattern matched.
+    """
+    for pattern, cmd in _HEBREW_COMMANDS:
+        if pattern.search(body):
+            deadline = None
+            m = _HEBREW_DATE_RE.search(body)
+            if m:
+                if m.group(4):   # YYYY-MM-DD
+                    deadline = m.group(4)
+                else:             # DD/MM/YYYY
+                    d, mo, y = m.group(1), m.group(2), m.group(3)
+                    y = ("20" + y) if len(y) == 2 else y
+                    deadline = f"{y}-{mo.zfill(2)}-{d.zfill(2)}"
+            return {"command": cmd, "target_person": None, "deadline": deadline,
+                    "title": None, "project_name": None, "message": None}
+    return None
+
+
 async def parse_finagent_command(
     body: str,
     known_users: list[dict],
 ) -> Optional[dict]:
-    """Parse a @FinAgent command from an email body. Returns structured command dict or None."""
+    """Parse a @FinAgent command from an email body. Returns structured command dict or None.
+    Tries fast regex-based Hebrew parser first; falls back to Gemini for complex cases."""
     if not body_mentions_agent(body):
         return None
 
+    # Fast path: common Hebrew commands
+    result = _parse_hebrew_command(body)
+    if result:
+        logger.info(f"Hebrew command parsed (regex): {result}")
+        return result
+
+    # Slow path: Gemini for complex / English commands
     users_str = "\n".join(f"- {u['name']} <{u['email']}>" for u in known_users)
     aliases = ", ".join(sorted(build_mailbox_aliases()))
 
@@ -190,7 +235,9 @@ If no clear @FinAgent command found, return {{"command": null}}."""
         text = await _generate(prompt)
         raw = _extract_json(text)
         if raw:
-            return json.loads(raw)
+            parsed = json.loads(raw)
+            logger.info(f"Gemini command parsed: {parsed}")
+            return parsed
     except Exception as e:
         logger.error(f"Gemini command parse error: {e}")
 
