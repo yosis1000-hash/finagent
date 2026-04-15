@@ -97,7 +97,7 @@ def _parse_message(message: dict) -> Optional[dict]:
             if addr:
                 recipients.append(addr)
 
-        body = _extract_body(message["payload"])
+        body = _unwrap_body(_extract_body(message["payload"]))
         has_attachments = _has_attachments(message["payload"])
 
         return {
@@ -118,18 +118,42 @@ def _parse_message(message: dict) -> Optional[dict]:
 
 
 def _extract_body(payload: dict) -> str:
-    """Recursively extract plain text body from message payload."""
+    """Recursively extract plain text body. Prefers text/plain; falls back to
+    HTML with tags stripped if no plain-text part exists."""
     if payload.get("mimeType") == "text/plain":
         data = payload.get("body", {}).get("data", "")
         if data:
             return base64.urlsafe_b64decode(data + "==").decode("utf-8", errors="replace")
-    if payload.get("mimeType") == "text/html":
-        return ""  # Skip HTML; prefer plain text
+
+    # Recurse into multipart children first (plain-text wins over html)
+    html_fallback = ""
     for part in payload.get("parts", []):
-        body = _extract_body(part)
-        if body:
-            return body
-    return ""
+        text = _extract_body(part)
+        if text and not html_fallback:
+            # If the recursive call returned from a html part it starts with \x00HTML\x00
+            if text.startswith("\x00HTML\x00"):
+                html_fallback = text[6:]
+            else:
+                return text  # plain text found in a child — return immediately
+
+    if payload.get("mimeType") == "text/html":
+        data = payload.get("body", {}).get("data", "")
+        if data:
+            raw = base64.urlsafe_b64decode(data + "==").decode("utf-8", errors="replace")
+            # Strip HTML tags for plain-text extraction
+            import re
+            plain = re.sub(r"<[^>]+>", " ", raw)
+            plain = re.sub(r"\s+", " ", plain).strip()
+            return "\x00HTML\x00" + plain  # sentinel so caller knows it came from HTML
+
+    return html_fallback
+
+
+def _unwrap_body(raw: str) -> str:
+    """Remove HTML-fallback sentinel if present."""
+    if raw.startswith("\x00HTML\x00"):
+        return raw[6:]
+    return raw
 
 
 def _has_attachments(payload: dict) -> bool:
@@ -164,6 +188,9 @@ async def send_email(to: str, subject: str, body_html: str, cc: Optional[list[st
         if cc:
             msg["Cc"] = ", ".join(cc)
 
+        import re as _re
+        body_plain = _re.sub(r"<[^>]+>", " ", body_html).strip()
+        msg.attach(MIMEText(body_plain, "plain", "utf-8"))
         msg.attach(MIMEText(body_html, "html", "utf-8"))
 
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
